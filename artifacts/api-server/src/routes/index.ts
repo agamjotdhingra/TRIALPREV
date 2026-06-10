@@ -14,6 +14,7 @@ import admissionsRouter from "./admissions";
 import staffRouter from "./staff";
 import notificationsRouter from "./notifications";
 import dashboardRouter from "./dashboard";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(admissionsRouter);
 router.use(staffRouter);
 router.use(notificationsRouter);
 router.use(dashboardRouter);
+router.use(chatRouter);
 
 export default router;

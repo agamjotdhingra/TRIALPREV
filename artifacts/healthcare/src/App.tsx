@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { Activity, Users, Stethoscope, Clock, FileText, FlaskConical, Building2, LayoutGrid, HeartPulse, UserCircle, Bell } from "lucide-react";
+import { Activity, Users, Stethoscope, Clock, FileText, FlaskConical, Building2, LayoutGrid, HeartPulse, UserCircle, Bell, MessageSquare } from "lucide-react";
 
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients/index";
@@ -22,6 +22,7 @@ import Wards from "@/pages/wards/index";
 import Admissions from "@/pages/admissions/index";
 import Staff from "@/pages/staff/index";
 import Notifications from "@/pages/notifications/index";
+import Chat from "@/pages/chat/index";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ function Sidebar() {
       items: [
         { href: "/staff", icon: UserCircle, label: "Staff Registry" },
         { href: "/notifications", icon: Bell, label: "Notifications" },
+        { href: "/chat", icon: MessageSquare, label: "Data Assistant" },
       ]
     }
   ];
@@ -147,6 +149,7 @@ function Router() {
       <Route path="/admissions" component={Admissions} />
       <Route path="/staff" component={Staff} />
       <Route path="/notifications" component={Notifications} />
+      <Route path="/chat" component={Chat} />
 
       <Route component={NotFound} />
     </Switch>

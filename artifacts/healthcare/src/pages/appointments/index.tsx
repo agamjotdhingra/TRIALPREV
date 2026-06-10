@@ -93,7 +93,7 @@ export default function Appointments() {
                       </TableCell>
                       <TableCell>
                         <Link href={`/doctors/${apt.doctorId}`} className="hover:underline">
-                          Dr. {apt.doctorName || `Doctor #${apt.doctorId}`}
+                          {apt.doctorName || `Doctor #${apt.doctorId}`}
                         </Link>
                       </TableCell>
                       <TableCell>

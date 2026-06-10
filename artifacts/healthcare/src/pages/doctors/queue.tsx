@@ -35,7 +35,7 @@ function QueueTable({ doctorId }: { doctorId: number }) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Smart Priority Queue</h1>
           <p className="text-muted-foreground mt-1">
-            Dr. {doctor.fullName} — patients ordered by clinical risk and health score.
+            {doctor.fullName} — patients ordered by clinical risk and health score.
           </p>
         </div>
       </div>

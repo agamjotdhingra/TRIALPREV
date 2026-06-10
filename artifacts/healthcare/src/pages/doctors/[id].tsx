@@ -32,7 +32,7 @@ export default function DoctorProfile() {
         <div className="flex-1 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">Dr. {doctor.fullName}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{doctor.fullName}</h1>
               <VerificationBadge status={doctor.verificationStatus} />
             </div>
             <p className="text-muted-foreground font-medium mt-1">{doctor.specialization} • {doctor.yearsOfExperience} yrs experience</p>

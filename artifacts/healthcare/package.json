@@ -73,5 +73,10 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@types/qrcode.react": "^3.0.0",
+    "qrcode.react": "^4.2.0",
+    "react-to-print": "^3.3.0"
   }
 }

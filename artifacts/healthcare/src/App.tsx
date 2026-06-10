@@ -132,8 +132,9 @@ function Router() {
       <Route path="/patients/:id" component={PatientEHR} />
       
       <Route path="/doctors" component={Doctors} />
-      <Route path="/doctors/:id" component={DoctorProfile} />
+      <Route path="/doctors/queue" component={DoctorQueue} />
       <Route path="/doctors/:id/queue" component={DoctorQueue} />
+      <Route path="/doctors/:id" component={DoctorProfile} />
       
       <Route path="/appointments" component={Appointments} />
       <Route path="/prescriptions" component={Prescriptions} />

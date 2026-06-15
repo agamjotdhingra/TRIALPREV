@@ -12,9 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, Bed, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/api/supabase";
 
 export default function HospitalBeds() {
   const { toast } = useToast();
@@ -25,6 +26,23 @@ export default function HospitalBeds() {
   const { data: beds, isLoading, refetch } = useListBeds();
   const { data: wards } = useListWards();
   const createBedMutation = useCreateBed();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("beds-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "beds" },
+        () => {
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
 
   const [form, setForm] = useState({
     wardId: "",

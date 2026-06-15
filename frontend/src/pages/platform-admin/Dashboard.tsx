@@ -1,4 +1,4 @@
-import { useGetDashboardStats, useGetRecentActivity, useGetRiskDistribution } from "@/api/hooks";
+import { useGetDashboardStats, useGetRecentActivity, useGetRiskDistribution, useGetAuditLogs } from "@/api/hooks";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Users, Stethoscope, FlaskConical, Building2, AlertCircle, Calendar, FileText, CheckCircle2, Activity } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
@@ -7,8 +7,9 @@ export default function PlatformDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity();
   const { data: riskDist, isLoading: riskLoading } = useGetRiskDistribution();
+  const { data: auditLogs, isLoading: auditLoading } = useGetAuditLogs();
 
-  if (statsLoading || activityLoading || riskLoading) {
+  if (statsLoading || activityLoading || riskLoading || auditLoading) {
     return <div className="p-8 text-center text-slate-400">Loading dashboard...</div>;
   }
 
@@ -112,6 +113,79 @@ export default function PlatformDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* EHR Access Audit Logs */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Activity className="h-5 w-5 text-violet-500" />
+            EHR Access Audit Trail (HIPAA Audit)
+          </CardTitle>
+          <CardDescription className="text-slate-400">
+            Immutable log of patient health record views, updates, and data exports.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-slate-300">
+              <thead className="text-xs uppercase bg-slate-950 text-slate-450">
+                <tr>
+                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">Operator</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">IP Address</th>
+                  <th className="px-4 py-3">Device/Agent</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850">
+                {auditLogs?.map((log: any) => (
+                  <tr key={log.id} className="hover:bg-slate-850/50">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-400">
+                      {new Date(log.accessed_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-white">
+                      {log.operator?.full_name || 'System / Guest'}
+                    </td>
+                    <td className="px-4 py-3 capitalize text-xs text-slate-400">
+                      {log.operator?.role || 'system'}
+                    </td>
+                    <td className="px-4 py-3 text-white">
+                      {log.patients?.full_name || `ID: ${log.patient_id}`}
+                      <span className="block text-[10px] text-slate-400 mt-0.5">
+                        {log.patients?.health_id || '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
+                        log.action === 'view' ? 'bg-blue-950/40 text-blue-400 border border-blue-500/20' :
+                        log.action === 'update' ? 'bg-amber-950/40 text-amber-450 border border-amber-500/20' :
+                        'bg-red-950/40 text-red-400 border border-red-500/20'
+                      }`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-mono text-slate-400">
+                      {log.ip_address || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs max-w-[200px] truncate text-slate-450" title={log.user_agent}>
+                      {log.user_agent || '—'}
+                    </td>
+                  </tr>
+                ))}
+                {!auditLogs?.length && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-6 text-slate-450">
+                      No EHR access logs recorded.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

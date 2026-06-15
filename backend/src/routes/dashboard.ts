@@ -5,9 +5,45 @@ import { requireRole } from '../middleware/requireRole.js';
 
 const router = Router();
 
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class MemoryCache {
+  private cache = new Map<string, CacheEntry<any>>();
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  set<T>(key: string, data: T, ttlMs: number): void {
+    this.cache.set(key, {
+      data,
+      expiresAt: Date.now() + ttlMs
+    });
+  }
+}
+
+const dashboardCache = new MemoryCache();
+
 // GET /api/dashboard/stats — platform_admin full | hospital_admin hospital stats | doctor doctor stats
 router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Promise<void> => {
+  const cacheKey = `${req.role}_${req.entityId || 'platform'}`;
+  const cachedData = dashboardCache.get(cacheKey);
+  if (cachedData) {
+    res.json(cachedData);
+    return;
+  }
+
   const today = new Date().toISOString().split('T')[0];
+  let responseData: any = {};
 
   if (req.role === 'platform_admin') {
     const [patients, doctors, labs, hospitals, appointments, reports, pendingVerifications] = await Promise.all([
@@ -21,7 +57,7 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
     ]);
 
     const patientData = patients.data || [];
-    res.json({
+    responseData = {
       totalPatients: patients.count ?? patientData.length,
       totalDoctors: doctors.count ?? 0,
       totalLabs: labs.count ?? 0,
@@ -30,7 +66,7 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
       todayAppointments: appointments.data?.length ?? 0,
       totalReports: reports.count ?? 0,
       pendingVerifications: pendingVerifications.count ?? 0,
-    });
+    };
 
   } else if (req.role === 'hospital_admin') {
     const [beds, admissions, staff] = await Promise.all([
@@ -41,7 +77,7 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
     const bedList = beds.data || [];
     const admList = admissions.data || [];
     const staffList = staff.data || [];
-    res.json({
+    responseData = {
       totalBeds: bedList.length,
       availableBeds: bedList.filter((b: any) => b.status === 'available').length,
       occupiedBeds: bedList.filter((b: any) => b.status === 'occupied').length,
@@ -49,27 +85,27 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
       icuPatients: admList.filter((a: any) => a.status === 'icu').length,
       doctorsOnDuty: staffList.filter((s: any) => s.role === 'doctor').length,
       nursesOnDuty: staffList.filter((s: any) => s.role === 'nurse').length,
-    });
+    };
 
   } else if (req.role === 'doctor') {
     const { data: appts } = await supabase.from('appointments').select('patient_id, status, scheduled_date').eq('doctor_id', req.entityId!);
     const apptList = appts || [];
     const uniquePatients = new Set(apptList.map((a: any) => a.patient_id));
-    res.json({
+    responseData = {
       totalPatients: uniquePatients.size,
       todayAppointments: apptList.filter((a: any) => a.scheduled_date === today).length,
       pendingAppointments: apptList.filter((a: any) => a.status === 'scheduled' && a.scheduled_date >= today).length,
       completedToday: apptList.filter((a: any) => a.scheduled_date === today && a.status === 'completed').length,
-    });
+    };
 
   } else if (req.role === 'lab_admin') {
     const { data: reports } = await supabase.from('reports').select('id, is_critical, created_at').eq('lab_id', req.entityId!);
     const reportList = reports || [];
-    res.json({
+    responseData = {
       totalReports: reportList.length,
       criticalReports: reportList.filter((r: any) => r.is_critical).length,
       todayReports: reportList.filter((r: any) => r.created_at?.startsWith(today)).length,
-    });
+    };
 
   } else if (req.role === 'patient') {
     const [patient, appts, reports] = await Promise.all([
@@ -78,7 +114,7 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
       supabase.from('reports').select('id, is_critical').eq('patient_id', req.entityId!),
     ]);
     const apptList = appts.data || [];
-    res.json({
+    responseData = {
       healthScore: patient.data?.health_score ?? 0,
       riskLevel: patient.data?.risk_level ?? 'healthy',
       bmi: patient.data?.bmi,
@@ -86,10 +122,14 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res): Prom
       upcomingAppointments: apptList.filter((a: any) => a.status === 'scheduled' && a.scheduled_date >= today).length,
       totalReports: reports.data?.length ?? 0,
       criticalReports: reports.data?.filter((r: any) => r.is_critical).length ?? 0,
-    });
+    };
   } else {
-    res.json({});
+    responseData = {};
   }
+
+  // Cache stats for 30 seconds
+  dashboardCache.set(cacheKey, responseData, 30000);
+  res.json(responseData);
 });
 
 // GET /api/dashboard/risk-distribution — platform_admin only

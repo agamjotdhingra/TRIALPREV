@@ -5,6 +5,8 @@ export interface AuthRequest extends Request {
   userId?: string;
   role?: string;
   entityId?: number | null;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 export async function authenticate(
@@ -42,6 +44,8 @@ export async function authenticate(
     req.userId = user.id;
     req.role = profile?.role ?? (user.app_metadata?.role as string | undefined);
     req.entityId = profile?.entity_id ?? null;
+    req.ipAddress = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() || req.ip || '';
+    req.userAgent = req.headers['user-agent'] || '';
     next();
   } catch {
     res.status(401).json({ error: 'Authentication failed' });

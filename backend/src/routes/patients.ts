@@ -7,6 +7,26 @@ import { calculateBmi, computeHealthScore, calcAge } from '../lib/health-score.j
 
 const router = Router();
 
+async function logEhrAccess(
+  operatorId: string | undefined,
+  patientId: number,
+  action: 'view' | 'update' | 'export',
+  req: AuthRequest
+) {
+  if (!operatorId) return;
+  try {
+    await supabase.from('ehr_audit_logs').insert({
+      operator_id: operatorId,
+      patient_id: patientId,
+      action,
+      ip_address: req.ipAddress || '',
+      user_agent: req.userAgent || '',
+    });
+  } catch (err) {
+    console.error('[EHR Audit Log Error]', err);
+  }
+}
+
 // GET /api/patients — platform_admin: all | doctor: only assigned patients
 router.get('/patients', authenticate, requireRole('platform_admin', 'doctor', 'hospital_admin'), async (req: AuthRequest, res): Promise<void> => {
   const { search, bloodGroup, riskLevel } = req.query as Record<string, string>;
@@ -39,20 +59,32 @@ router.get('/patients', authenticate, requireRole('platform_admin', 'doctor', 'h
 router.get('/patients/me', authenticate, requireRole('patient'), async (req: AuthRequest, res): Promise<void> => {
   const { data, error } = await supabase.from('patients').select('*').eq('id', req.entityId!).single();
   if (error) { res.status(404).json({ error: 'Patient record not found' }); return; }
+  
+  // Log self access
+  await logEhrAccess(req.userId, data.id, 'view', req);
+  
   res.json(data);
 });
 
 // GET /api/patients/by-health-id/:healthId — lab_admin / doctor / hospital_admin can search
-router.get('/patients/by-health-id/:healthId', authenticate, requireRole('lab_admin', 'doctor', 'hospital_admin', 'platform_admin'), async (req, res): Promise<void> => {
+router.get('/patients/by-health-id/:healthId', authenticate, requireRole('lab_admin', 'doctor', 'hospital_admin', 'platform_admin'), async (req: AuthRequest, res): Promise<void> => {
   const { data, error } = await supabase.from('patients').select('id, health_id, full_name, date_of_birth, gender, blood_group, mobile, health_score, risk_level').eq('health_id', req.params.healthId).single();
   if (error) { res.status(404).json({ error: 'Patient not found' }); return; }
+  
+  // Log EHR view
+  await logEhrAccess(req.userId, data.id, 'view', req);
+
   res.json(data);
 });
 
 // GET /api/patients/:id — role-gated
-router.get('/patients/:id', authenticate, requireRole('platform_admin', 'doctor', 'hospital_admin'), async (req, res): Promise<void> => {
+router.get('/patients/:id', authenticate, requireRole('platform_admin', 'doctor', 'hospital_admin'), async (req: AuthRequest, res): Promise<void> => {
   const { data, error } = await supabase.from('patients').select('*').eq('id', req.params.id).single();
   if (error) { res.status(404).json({ error: 'Patient not found' }); return; }
+  
+  // Log EHR view
+  await logEhrAccess(req.userId, data.id, 'view', req);
+
   res.json(data);
 });
 
@@ -71,6 +103,9 @@ router.patch('/patients/me', authenticate, requireRole('patient'), async (req: A
     .single();
 
   if (error) { res.status(500).json({ error: error.message }); return; }
+
+  // Log EHR update
+  await logEhrAccess(req.userId, data.id, 'update', req);
 
   // Sync name to user_profiles
   if (rest.full_name) {

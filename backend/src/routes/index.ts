@@ -11,6 +11,7 @@ import admissionsRouter from './admissions.js';
 import documentsRouter from './documents.js';
 import notificationsRouter from './notifications.js';
 import dashboardRouter from './dashboard.js';
+import auditRouter from './audit.js';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use(admissionsRouter);
 router.use(documentsRouter);
 router.use(notificationsRouter);
 router.use(dashboardRouter);
+router.use(auditRouter);
 
 export default router;

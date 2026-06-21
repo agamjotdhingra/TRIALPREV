@@ -23,6 +23,13 @@ export function useGetRiskDistribution() {
   });
 }
 
+export function useGetAuditLogs() {
+  return useQuery<any[]>({
+    queryKey: ['audit-logs'],
+    queryFn: () => get('/audit-logs'),
+  });
+}
+
 // ── PATIENTS ────────────────────────────────────────────────────────────────
 export function useListPatients(params: { search?: string; bloodGroup?: string; riskLevel?: string } = {}) {
   const queryStr = new URLSearchParams(params as any).toString();

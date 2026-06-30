@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/api/supabase';
 import { get } from '@/api/client';
@@ -28,31 +28,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const loadedUserIdRef = useRef<string | null>(null);
 
-  async function loadProfile() {
+  async function loadProfile(userId: string) {
+    if (loadedUserIdRef.current === userId) {
+      setIsLoading(false);
+      return;
+    }
+    loadedUserIdRef.current = userId;
+    setIsLoading(true);
     try {
       const data = await get<UserProfile>('/auth/me');
       setProfile(data);
     } catch {
       setProfile(null);
+      loadedUserIdRef.current = null;
+    } finally {
+      setIsLoading(false);
     }
+  }
+
+  function clearAuth() {
+    setProfile(null);
+    setSession(null);
+    loadedUserIdRef.current = null;
+    setIsLoading(false);
   }
 
   useEffect(() => {
     // Initial session load
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) loadProfile().finally(() => setIsLoading(false));
-      else setIsLoading(false);
+      if (session) {
+        loadProfile(session.user.id);
+      } else {
+        clearAuth();
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-        loadProfile();
+        loadProfile(session.user.id);
       } else {
-        setProfile(null);
+        clearAuth();
       }
     });
 
@@ -60,9 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signOut() {
-    await supabase.auth.signOut();
-    setSession(null);
-    setProfile(null);
+    setIsLoading(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      clearAuth();
+    }
   }
 
   return (

@@ -66,97 +66,103 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ── Preventiv: Clean Green & White Theme ── */
 :root {
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
-  
+  /* Pure white backgrounds */
+  --background: 0 0% 98%;
+  --foreground: 150 20% 10%;
+
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 214 32% 91%;
-  
+  --card-foreground: 150 20% 10%;
+  --card-border: 150 20% 90%;
+
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --popover-border: 214 32% 91%;
-  
-  --primary: 206 100% 21%;
-  --primary-foreground: 210 40% 98%;
-  
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222 47% 11.2%;
-  
-  --muted: 214 32% 91%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  
-  --accent: 198 54% 91%;
-  --accent-foreground: 206 100% 21%;
-  
-  --destructive: 358 65% 51%;
-  --destructive-foreground: 210 40% 98%;
+  --popover-foreground: 150 20% 10%;
+  --popover-border: 150 20% 88%;
 
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 206 100% 21%;
+  /* Preventiv signature green — lighter, fresher */
+  --primary: 152 55% 42%;
+  --primary-foreground: 0 0% 100%;
 
-  --sidebar: 206 100% 15%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 206 100% 12%;
-  --sidebar-primary: 210 40% 98%;
-  --sidebar-primary-foreground: 206 100% 21%;
-  --sidebar-accent: 206 100% 25%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 210 40% 98%;
+  --secondary: 150 45% 95%;
+  --secondary-foreground: 152 55% 32%;
 
-  --chart-1: 198 80% 40%;
-  --chart-2: 206 100% 30%;
-  --chart-3: 175 70% 40%;
-  --chart-4: 210 90% 50%;
-  --chart-5: 200 60% 60%;
+  --muted: 150 25% 95%;
+  --muted-foreground: 150 18% 48%;
 
-  --app-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --accent: 152 60% 93%;
+  --accent-foreground: 152 55% 30%;
+
+  --destructive: 4 86% 58%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 150 30% 88%;
+  --input: 150 30% 88%;
+  --ring: 152 55% 42%;
+
+  /* Sidebar — medium fresh green */
+  --sidebar: 152 45% 22%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-border: 152 40% 18%;
+  --sidebar-primary: 0 0% 98%;
+  --sidebar-primary-foreground: 152 45% 22%;
+  --sidebar-accent: 152 42% 30%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-ring: 152 60% 65%;
+
+  /* Charts — green palette */
+  --chart-1: 152 55% 44%;
+  --chart-2: 162 60% 48%;
+  --chart-3: 140 55% 52%;
+  --chart-4: 170 55% 44%;
+  --chart-5: 130 50% 56%;
+
+  --app-font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
-  --radius: 0.3rem;
+  --radius: 0.5rem;
 }
 
+/* Dark mode — deep emerald/forest tones */
 .dark {
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  
-  --card: 222 47% 11%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217.2 32.6% 17.5%;
-  
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217.2 32.6% 17.5%;
-  
-  --primary: 206 100% 40%;
-  --primary-foreground: 210 40% 98%;
-  
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  
-  --destructive: 358 65% 51%;
-  --destructive-foreground: 210 40% 98%;
+  --background: 152 25% 7%;
+  --foreground: 0 0% 96%;
 
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 212.7 26.8% 83.9%;
-  
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217.2 32.6% 17.5%;
-  --sidebar-primary: 206 100% 40%;
-  --sidebar-primary-foreground: 210 40% 98%;
-  --sidebar-accent: 217.2 32.6% 17.5%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 212.7 26.8% 83.9%;
+  --card: 152 22% 9%;
+  --card-foreground: 0 0% 96%;
+  --card-border: 152 20% 15%;
+
+  --popover: 152 22% 9%;
+  --popover-foreground: 0 0% 96%;
+  --popover-border: 152 20% 15%;
+
+  --primary: 152 72% 42%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 152 20% 14%;
+  --secondary-foreground: 0 0% 96%;
+
+  --muted: 152 20% 13%;
+  --muted-foreground: 150 15% 55%;
+
+  --accent: 152 25% 16%;
+  --accent-foreground: 0 0% 96%;
+
+  --destructive: 4 86% 58%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 152 20% 15%;
+  --input: 152 20% 15%;
+  --ring: 152 72% 50%;
+
+  --sidebar: 152 25% 7%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-border: 152 20% 10%;
+  --sidebar-primary: 152 72% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 152 20% 13%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-ring: 152 72% 55%;
 }
 
 @layer base {
@@ -165,5 +171,130 @@
   }
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+/* ============================================================
+   PREVENTIV — GLOBAL DARK-TO-LIGHT COMPATIBILITY OVERRIDES
+   All pages use hardcoded dark slate classes from the old theme.
+   These rules remap them globally so no page file needs touching.
+   ============================================================ */
+@layer utilities {
+
+  /* ── Background overrides: dark slate → white/light ── */
+  .bg-slate-950 { background-color: hsl(150 20% 97%) !important; }
+  .bg-slate-900 { background-color: #ffffff !important; }
+  .bg-slate-850 { background-color: hsl(150 20% 96%) !important; }
+  .bg-slate-800 { background-color: hsl(150 20% 94%) !important; }
+  .bg-slate-700 { background-color: hsl(150 15% 88%) !important; }
+
+  /* Opacity variants */
+  .bg-slate-950\/40,
+  .bg-slate-950\/20 { background-color: hsl(150 25% 96%) !important; }
+  .bg-slate-850\/40,
+  .bg-slate-800\/30,
+  .bg-slate-800\/50 { background-color: hsl(150 20% 93%) !important; }
+
+  /* ── Text overrides: white text → dark green-gray text ── */
+  .text-white     { color: hsl(152 30% 10%) !important; }
+
+  /* Slate muted text → appropriate mid tones */
+  .text-slate-100 { color: hsl(152 20% 15%) !important; }
+  .text-slate-200 { color: hsl(152 15% 20%) !important; }
+  .text-slate-300 { color: hsl(152 12% 28%) !important; }
+  .text-slate-350 { color: hsl(152 10% 35%) !important; }
+  .text-slate-400 { color: hsl(152 10% 42%) !important; }
+  .text-slate-450 { color: hsl(152 8% 48%) !important; }
+  .text-slate-500 { color: hsl(152 8% 52%) !important; }
+  .text-slate-600 { color: hsl(152 8% 58%) !important; }
+  .text-slate-650 { color: hsl(152 8% 60%) !important; }
+
+  /* ── Border overrides: dark slate → light green borders ── */
+  .border-slate-800  { border-color: hsl(150 20% 88%) !important; }
+  .border-slate-850  { border-color: hsl(150 20% 90%) !important; }
+  .border-slate-700  { border-color: hsl(150 15% 84%) !important; }
+
+  /* Divide utilities */
+  .divide-slate-850 > * + * { border-color: hsl(150 20% 90%) !important; }
+  .divide-slate-800 > * + * { border-color: hsl(150 20% 88%) !important; }
+
+  /* ── Hover overrides ── */
+  .hover\:bg-slate-800:hover     { background-color: hsl(150 20% 92%) !important; }
+  .hover\:bg-slate-850\/40:hover { background-color: hsl(150 20% 91%) !important; }
+  .hover\:bg-slate-850\/50:hover { background-color: hsl(150 20% 92%) !important; }
+  .hover\:text-white:hover       { color: hsl(152 55% 32%) !important; }
+  .hover\:border-slate-700:hover { border-color: hsl(152 30% 78%) !important; }
+  .hover\:bg-slate-800\/30:hover { background-color: hsl(150 20% 92%) !important; }
+
+  /* ── Card background overrides ── */
+  .bg-white\/5   { background-color: hsl(150 30% 97%) !important; }
+  .bg-white\/10  { background-color: hsl(150 20% 94%) !important; }
+  .border-white\/10 { border-color: hsl(150 20% 88%) !important; }
+
+  /* ── Status badge & chip colors — light theme ── */
+  .bg-blue-900\/30      { background-color: hsl(214 80% 94%) !important; }
+  .text-blue-400        { color: hsl(214 80% 38%) !important; }
+  .border-blue-500\/20  { border-color: hsl(214 80% 75%) !important; }
+  .bg-blue-950\/40      { background-color: hsl(214 80% 94%) !important; }
+
+  .bg-emerald-900\/30      { background-color: hsl(152 55% 93%) !important; }
+  .text-emerald-400        { color: hsl(152 55% 38%) !important; }
+  .text-emerald-500        { color: hsl(152 55% 36%) !important; }
+  .border-emerald-500\/20  { border-color: hsl(152 55% 74%) !important; }
+  .bg-emerald-950\/40      { background-color: hsl(152 55% 93%) !important; }
+
+  .bg-red-900\/30      { background-color: hsl(4 80% 94%) !important; }
+  .text-red-400        { color: hsl(4 72% 42%) !important; }
+  .text-red-500        { color: hsl(4 72% 38%) !important; }
+  .border-red-500\/20  { border-color: hsl(4 72% 72%) !important; }
+  .bg-red-950\/40      { background-color: hsl(4 80% 94%) !important; }
+
+  .bg-orange-900\/30      { background-color: hsl(25 90% 93%) !important; }
+  .text-orange-400        { color: hsl(25 80% 42%) !important; }
+  .text-orange-500        { color: hsl(25 80% 38%) !important; }
+  .border-orange-500\/20  { border-color: hsl(25 80% 72%) !important; }
+
+  .bg-yellow-950\/40      { background-color: hsl(48 90% 93%) !important; }
+  .text-yellow-400        { color: hsl(48 90% 38%) !important; }
+  .border-yellow-500\/20  { border-color: hsl(48 90% 68%) !important; }
+
+  .bg-amber-950\/40       { background-color: hsl(38 90% 93%) !important; }
+  .text-amber-400         { color: hsl(38 80% 38%) !important; }
+  .text-amber-450         { color: hsl(38 80% 36%) !important; }
+  .text-amber-500         { color: hsl(38 80% 34%) !important; }
+  .border-amber-500\/20   { border-color: hsl(38 80% 72%) !important; }
+
+  /* ── Other colour tokens for icons / accents ── */
+  .bg-blue-500\/10    { background-color: hsl(214 80% 95%) !important; }
+  .bg-violet-500\/10  { background-color: hsl(260 70% 95%) !important; }
+  .text-violet-400    { color: hsl(260 70% 42%) !important; }
+  .text-violet-500    { color: hsl(260 70% 38%) !important; }
+  .bg-amber-500\/10   { background-color: hsl(38 90% 94%) !important; }
+  .bg-emerald-500\/10 { background-color: hsl(152 55% 94%) !important; }
+  .bg-orange-500\/10  { background-color: hsl(25 90% 95%) !important; }
+  .bg-indigo-500\/10  { background-color: hsl(240 65% 95%) !important; }
+  .text-indigo-400    { color: hsl(240 65% 42%) !important; }
+  .text-indigo-500    { color: hsl(240 65% 38%) !important; }
+  .bg-rose-500\/10    { background-color: hsl(350 80% 95%) !important; }
+  .text-rose-400      { color: hsl(350 70% 42%) !important; }
+  .text-cyan-500      { color: hsl(190 80% 36%) !important; }
+  .text-purple-500    { color: hsl(270 65% 42%) !important; }
+  .text-blue-500      { color: hsl(214 80% 38%) !important; }
+
+  /* ── Table rows ── */
+  .hover\:bg-transparent:hover   { background-color: transparent !important; }
+
+  /* ── Primary/action buttons: old blue → Preventiv light green ── */
+  .bg-blue-600              { background-color: hsl(152 55% 42%) !important; }
+  .hover\:bg-blue-500:hover { background-color: hsl(152 55% 38%) !important; }
+  .shadow-blue-500\/20      { box-shadow: 0 4px 16px hsl(152 55% 42% / 0.28) !important; }
+  .shadow-blue-500\/30      { box-shadow: 0 6px 20px hsl(152 55% 42% / 0.38) !important; }
+
+  .bg-emerald-600              { background-color: hsl(152 50% 38%) !important; }
+  .hover\:bg-emerald-500:hover { background-color: hsl(152 50% 34%) !important; }
+
+  /* ── Font family for all page content ── */
+  body, button, input, select, textarea {
+    font-family: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 }

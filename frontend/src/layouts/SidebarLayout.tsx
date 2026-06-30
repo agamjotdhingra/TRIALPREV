@@ -1,103 +1,149 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/auth/AuthContext';
-import { Bell, LogOut, Menu, X } from 'lucide-react';
+import { Bell, LogOut, Menu, Leaf } from 'lucide-react';
 import { useState } from 'react';
+
+// Colours — medium fresh green (not too dark, not too light)
+const G = {
+  sidebar:      'hsl(152 42% 22%)',
+  sidebarDark:  'hsl(152 40% 17%)',
+  sidebarLight: 'hsl(152 40% 28%)',
+  active:       'hsl(152 50% 36%)',
+  activeBorder: 'hsl(152 55% 60%)',
+  activeBg:     'hsl(152 48% 32% / 0.85)',
+  hover:        'hsl(152 40% 28% / 0.55)',
+  iconMuted:    'hsl(152 35% 72%)',
+  textMuted:    'hsl(152 28% 68%)',
+  subtext:      'hsl(152 30% 58%)',
+  border:       'hsl(152 35% 18%)',
+  avatarGrad:   'linear-gradient(135deg, hsl(152 55% 42%) 0%, hsl(162 55% 48%) 100%)',
+  primary:      'hsl(152 55% 42%)',
+};
 
 interface NavItem {
   href: string;
-  icon: string;
+  icon: ReactNode;   // Lucide component
   label: string;
 }
 
 interface SidebarLayoutProps {
   children: ReactNode;
   navItems: NavItem[];
-  brandColor: string;      // tailwind color class e.g. 'blue'
+  brandColor?: string;
   roleLabel: string;
-  roleIcon: string;
+  roleIcon?: ReactNode;
 }
 
-export function SidebarLayout({ children, navItems, brandColor, roleLabel, roleIcon }: SidebarLayoutProps) {
+export function SidebarLayout({ children, navItems, roleLabel }: SidebarLayoutProps) {
   const { profile, signOut } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const colorMap: Record<string, string> = {
-    blue:    'bg-blue-600 shadow-blue-500/20',
-    emerald: 'bg-emerald-600 shadow-emerald-500/20',
-    violet:  'bg-violet-600 shadow-violet-500/20',
-    amber:   'bg-amber-600 shadow-amber-500/20',
-    rose:    'bg-rose-600 shadow-rose-500/20',
-  };
-  const activeMap: Record<string, string> = {
-    blue:    'bg-blue-600/20 text-blue-400 border-r-2 border-blue-500',
-    emerald: 'bg-emerald-600/20 text-emerald-400 border-r-2 border-emerald-500',
-    violet:  'bg-violet-600/20 text-violet-400 border-r-2 border-violet-500',
-    amber:   'bg-amber-600/20 text-amber-400 border-r-2 border-amber-500',
-    rose:    'bg-rose-600/20 text-rose-400 border-r-2 border-rose-500',
-  };
-
-  const brandBg = colorMap[brandColor] || colorMap.blue;
-  const activeCls = activeMap[brandColor] || activeMap.blue;
-
   const Sidebar = () => (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full">
-      {/* Brand */}
-      <div className="p-6 border-b border-slate-800">
+    <aside
+      className="w-64 flex flex-col h-full select-none"
+      style={{ background: `linear-gradient(180deg, ${G.sidebar} 0%, ${G.sidebarDark} 100%)` }}
+    >
+      {/* ── Brand ── */}
+      <div className="px-5 py-5" style={{ borderBottom: `1px solid ${G.border}` }}>
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl ${brandBg} shadow-lg flex items-center justify-center text-white font-bold text-lg`}>
-            {roleIcon}
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
+            style={{ background: G.avatarGrad }}
+          >
+            <Leaf className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="text-white font-bold text-lg leading-none">HealthOS</p>
-            <p className="text-slate-400 text-xs mt-0.5">{roleLabel}</p>
+            <p className="text-white font-extrabold text-base leading-none tracking-tight">preventiv</p>
+            <p className="text-xs mt-0.5 font-medium" style={{ color: G.subtext }}>{roleLabel}</p>
           </div>
         </div>
       </div>
 
-      {/* User info */}
-      <div className="px-4 py-3 border-b border-slate-800">
-        <div className="flex items-center gap-3 bg-slate-800/50 rounded-xl px-3 py-2.5">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-semibold">
+      {/* ── User info ── */}
+      <div className="px-4 py-3" style={{ borderBottom: `1px solid ${G.border}` }}>
+        <div
+          className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+          style={{ background: 'hsl(152 40% 28% / 0.4)' }}
+        >
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+            style={{ background: G.avatarGrad }}
+          >
             {profile?.full_name?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{profile?.full_name}</p>
-            <p className="text-slate-400 text-xs capitalize">{profile?.role?.replace('_', ' ')}</p>
+            <p className="text-white text-sm font-semibold truncate leading-tight">{profile?.full_name}</p>
+            <p className="text-xs capitalize leading-tight mt-0.5" style={{ color: G.textMuted }}>
+              {profile?.role?.replace(/_/g, ' ')}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+      {/* ── Navigation ── */}
+      <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location === item.href || location.startsWith(item.href + '/');
           return (
             <Link key={item.href} href={item.href}>
               <a
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  isActive
-                    ? activeCls
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer group"
+                style={isActive ? {
+                  background: G.activeBg,
+                  color: '#fff',
+                  borderLeft: `3px solid ${G.activeBorder}`,
+                  paddingLeft: '9px',
+                } : {
+                  color: G.iconMuted,
+                  borderLeft: '3px solid transparent',
+                  paddingLeft: '9px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = G.hover;
+                    (e.currentTarget as HTMLElement).style.color = '#fff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLElement).style.color = G.iconMuted;
+                  }
+                }}
                 onClick={() => setMobileOpen(false)}
               >
-                <span className="text-base">{item.icon}</span>
-                {item.label}
+                {/* Icon */}
+                <span
+                  className="flex-shrink-0 w-4 h-4 flex items-center justify-center"
+                  style={{ color: isActive ? '#fff' : G.iconMuted }}
+                >
+                  {item.icon}
+                </span>
+                <span className="truncate">{item.label}</span>
               </a>
             </Link>
           );
         })}
       </nav>
 
-      {/* Sign out */}
-      <div className="p-4 border-t border-slate-800">
+      {/* ── Sign out ── */}
+      <div className="p-4" style={{ borderTop: `1px solid ${G.border}` }}>
         <button
           onClick={signOut}
-          className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg text-sm font-medium transition-all"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+          style={{ color: G.textMuted, borderLeft: '3px solid transparent', paddingLeft: '9px' }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = 'hsl(4 86% 72%)';
+            (e.currentTarget as HTMLElement).style.background = 'hsl(4 86% 58% / 0.12)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = G.textMuted;
+            (e.currentTarget as HTMLElement).style.background = 'transparent';
+          }}
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-4 h-4 flex-shrink-0" />
           Sign Out
         </button>
       </div>
@@ -105,7 +151,7 @@ export function SidebarLayout({ children, navItems, brandColor, roleLabel, roleI
   );
 
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'hsl(150 25% 97%)' }}>
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-col flex-shrink-0">
         <Sidebar />
@@ -114,7 +160,7 @@ export function SidebarLayout({ children, navItems, brandColor, roleLabel, roleI
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-64 flex flex-col">
             <Sidebar />
           </div>
@@ -124,21 +170,67 @@ export function SidebarLayout({ children, navItems, brandColor, roleLabel, roleI
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center px-4 gap-4 flex-shrink-0">
+        <header
+          className="h-14 flex items-center px-5 gap-4 flex-shrink-0"
+          style={{
+            background: '#fff',
+            borderBottom: '1px solid hsl(150 30% 90%)',
+            boxShadow: '0 1px 6px hsl(152 30% 50% / 0.06)',
+          }}
+        >
           <button
-            className="lg:hidden text-slate-400 hover:text-white"
+            className="lg:hidden"
+            style={{ color: 'hsl(152 18% 48%)' }}
             onClick={() => setMobileOpen(true)}
           >
             <Menu className="w-5 h-5" />
           </button>
+          {/* Mobile brand */}
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: G.avatarGrad }}>
+              <Leaf className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-extrabold text-base" style={{ color: G.sidebar }}>preventiv</span>
+          </div>
+
           <div className="flex-1" />
-          <button className="text-slate-400 hover:text-white relative">
-            <Bell className="w-5 h-5" />
+
+          {/* Bell */}
+          <button
+            className="relative w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
+            style={{ color: G.active }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'hsl(152 50% 93%)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <Bell className="w-4.5 h-4.5" />
+            <span
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-white"
+              style={{ background: 'hsl(152 55% 42%)' }}
+            />
           </button>
+
+          {/* Avatar chip */}
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer"
+            style={{
+              background: 'hsl(152 45% 95%)',
+              border: '1px solid hsl(152 35% 86%)',
+            }}
+          >
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+              style={{ background: G.avatarGrad }}
+            >
+              {profile?.full_name?.[0]?.toUpperCase() ?? '?'}
+            </div>
+            <span className="hidden sm:block text-sm font-semibold" style={{ color: G.sidebar }}>
+              {profile?.full_name?.split(' ')[0]}
+            </span>
+          </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-slate-950">
+        <main className="flex-1 overflow-y-auto" style={{ background: 'hsl(150 25% 97%)' }}>
           {children}
         </main>
       </div>

@@ -89,7 +89,7 @@ export default function RegisterPage() {
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'hsl(150 30% 97%)' }}>
         <div className="w-full max-w-md text-center">
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-               style={{ background: 'linear-gradient(135deg, hsl(152 72% 36%) 0%, hsl(162 65% 42%) 100%)', boxShadow: '0 8px 32px hsl(152 72% 32% / 0.35)' }}>
+               style={{ background: 'linear-gradient(135deg, hsl(152 55% 40%) 0%, hsl(162 52% 46%) 100%)', boxShadow: '0 8px 32px hsl(152 72% 32% / 0.35)' }}>
             <CheckCircle className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-3xl font-bold mb-3" style={{ color: 'hsl(152 30% 10%)' }}>Account Created!</h2>
@@ -98,7 +98,7 @@ export default function RegisterPage() {
           </p>
           <Link href="/auth/login">
             <span className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white cursor-pointer transition-all"
-                  style={{ background: 'linear-gradient(135deg, hsl(152 72% 32%) 0%, hsl(162 65% 38%) 100%)', boxShadow: '0 4px 16px hsl(152 72% 32% / 0.35)' }}>
+                  style={{ background: 'linear-gradient(135deg, hsl(152 55% 38%) 0%, hsl(162 52% 44%) 100%)', boxShadow: '0 4px 16px hsl(152 72% 32% / 0.35)' }}>
               Go to Login <ArrowRight className="w-4 h-4" />
             </span>
           </Link>
@@ -111,7 +111,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>
       {/* Left decorative panel */}
       <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden"
-           style={{ background: 'linear-gradient(145deg, hsl(152 60% 12%) 0%, hsl(152 72% 20%) 50%, hsl(162 65% 16%) 100%)' }}>
+           style={{ background: 'linear-gradient(145deg, hsl(152 45% 18%) 0%, hsl(152 50% 28%) 50%, hsl(162 48% 22%) 100%)' }}>
         <div className="absolute inset-0 opacity-5"
              style={{ backgroundImage: 'radial-gradient(circle, hsl(0 0% 100%) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
         <div className="absolute -top-32 -right-20 w-80 h-80 rounded-full opacity-15"
@@ -119,22 +119,22 @@ export default function RegisterPage() {
 
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-               style={{ background: 'hsl(152 72% 36% / 0.3)', border: '1px solid hsl(152 72% 50% / 0.4)' }}>
-            <ShieldCheck className="w-5 h-5" style={{ color: 'hsl(152 72% 72%)' }} />
+               style={{ background: 'hsl(152 50% 42% / 0.3)', border: '1px solid hsl(152 50% 50% / 0.4)' }}>
+            <ShieldCheck className="w-5 h-5" style={{ color: 'hsl(152 35% 72%)' }} />
           </div>
           <span className="text-white font-bold text-xl tracking-tight">preventiv</span>
         </div>
 
         <div className="relative z-10 space-y-4">
           <h2 className="text-3xl font-bold text-white">Your health journey<br />starts here.</h2>
-          <p style={{ color: 'hsl(152 20% 72%)' }}>
+          <p style={{ color: 'hsl(152 28% 72%)' }}>
             Create your Preventiv account in minutes and get access to your complete digital health record.
           </p>
           <div className="space-y-2 pt-2">
             {['Secure health profile', 'Appointment management', 'Digital prescriptions & lab reports'].map(t => (
               <div key={t} className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 flex-shrink-0" style={{ color: 'hsl(152 72% 55%)' }} />
-                <span className="text-sm" style={{ color: 'hsl(152 20% 75%)' }}>{t}</span>
+                <span className="text-sm" style={{ color: 'hsl(152 28% 75%)' }}>{t}</span>
               </div>
             ))}
           </div>
@@ -150,10 +150,10 @@ export default function RegisterPage() {
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2 mb-8">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-               style={{ background: 'linear-gradient(135deg, hsl(152 72% 36%) 0%, hsl(162 65% 42%) 100%)' }}>
+               style={{ background: 'linear-gradient(135deg, hsl(152 55% 40%) 0%, hsl(162 52% 46%) 100%)' }}>
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl" style={{ color: 'hsl(152 60% 22%)' }}>preventiv</span>
+          <span className="font-bold text-xl" style={{ color: 'hsl(152 55% 42%)' }}>preventiv</span>
         </div>
 
         <div className="w-full max-w-lg">
@@ -171,11 +171,11 @@ export default function RegisterPage() {
                        style={s.num < step
                          ? { background: 'hsl(152 72% 36%)', color: '#fff' }
                          : s.num === step
-                         ? { background: 'linear-gradient(135deg, hsl(152 72% 32%) 0%, hsl(162 65% 38%) 100%)', color: '#fff', boxShadow: '0 2px 8px hsl(152 72% 32% / 0.4)' }
+                         ? { background: 'linear-gradient(135deg, hsl(152 55% 38%) 0%, hsl(162 52% 44%) 100%)', color: '#fff', boxShadow: '0 2px 8px hsl(152 72% 32% / 0.4)' }
                          : { background: 'hsl(150 20% 92%)', color: 'hsl(150 15% 50%)' }}>
                     {s.num < step ? '✓' : s.num}
                   </div>
-                  <span className="text-xs font-medium hidden sm:block" style={{ color: s.num <= step ? 'hsl(152 60% 22%)' : 'hsl(150 15% 55%)' }}>
+                  <span className="text-xs font-medium hidden sm:block" style={{ color: s.num <= step ? 'hsl(152 55% 42%)' : 'hsl(150 15% 55%)' }}>
                     {s.label}
                   </span>
                 </div>

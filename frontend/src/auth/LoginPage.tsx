@@ -30,7 +30,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>
       {/* Left panel — decorative */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12"
-           style={{ background: 'linear-gradient(145deg, hsl(152 60% 12%) 0%, hsl(152 72% 20%) 50%, hsl(162 65% 16%) 100%)' }}>
+           style={{ background: 'linear-gradient(145deg, hsl(152 45% 18%) 0%, hsl(152 50% 28%) 50%, hsl(162 48% 22%) 100%)' }}>
         {/* Background blobs */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-20"
@@ -49,8 +49,8 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                 style={{ background: 'hsl(152 72% 36% / 0.3)', border: '1px solid hsl(152 72% 50% / 0.4)' }}>
-              <ShieldCheck className="w-5 h-5" style={{ color: 'hsl(152 72% 72%)' }} />
+                 style={{ background: 'hsl(152 50% 42% / 0.3)', border: '1px solid hsl(152 50% 50% / 0.4)' }}>
+              <ShieldCheck className="w-5 h-5" style={{ color: 'hsl(152 35% 72%)' }} />
             </div>
             <span className="text-white font-bold text-xl tracking-tight">preventiv</span>
           </div>
@@ -62,7 +62,7 @@ export default function LoginPage() {
               Healthcare,<br />
               <span style={{ color: 'hsl(152 72% 65%)' }}>reimagined.</span>
             </h2>
-            <p className="text-lg leading-relaxed" style={{ color: 'hsl(152 20% 75%)' }}>
+            <p className="text-lg leading-relaxed" style={{ color: 'hsl(152 28% 72%)' }}>
               A unified platform connecting patients, doctors, hospitals, and labs — all in one trusted space.
             </p>
           </div>
@@ -94,10 +94,10 @@ export default function LoginPage() {
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2 mb-8">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-               style={{ background: 'linear-gradient(135deg, hsl(152 72% 36%) 0%, hsl(162 65% 42%) 100%)' }}>
+               style={{ background: 'linear-gradient(135deg, hsl(152 55% 42%) 0%, hsl(162 65% 42%) 100%)' }}>
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl" style={{ color: 'hsl(152 60% 22%)' }}>preventiv</span>
+          <span className="font-bold text-xl" style={{ color: 'hsl(152 55% 42%)' }}>preventiv</span>
         </div>
 
         <div className="w-full max-w-md">
@@ -134,7 +134,7 @@ export default function LoginPage() {
                     border: '1.5px solid hsl(150 20% 88%)',
                     color: 'hsl(152 30% 10%)',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = 'hsl(152 72% 36%)'; e.target.style.boxShadow = '0 0 0 3px hsl(152 72% 36% / 0.12)'; }}
+                  onFocus={(e) => { e.target.style.borderColor = 'hsl(152 55% 42%)'; e.target.style.boxShadow = '0 0 0 3px hsl(152 72% 36% / 0.12)'; }}
                   onBlur={(e) => { e.target.style.borderColor = 'hsl(150 20% 88%)'; e.target.style.boxShadow = 'none'; }}
                   placeholder="you@example.com"
                 />
@@ -160,7 +160,7 @@ export default function LoginPage() {
                     border: '1.5px solid hsl(150 20% 88%)',
                     color: 'hsl(152 30% 10%)',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = 'hsl(152 72% 36%)'; e.target.style.boxShadow = '0 0 0 3px hsl(152 72% 36% / 0.12)'; }}
+                  onFocus={(e) => { e.target.style.borderColor = 'hsl(152 55% 42%)'; e.target.style.boxShadow = '0 0 0 3px hsl(152 72% 36% / 0.12)'; }}
                   onBlur={(e) => { e.target.style.borderColor = 'hsl(150 20% 88%)'; e.target.style.boxShadow = 'none'; }}
                   placeholder="••••••••"
                 />
@@ -173,7 +173,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white transition-all duration-200 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: loading ? 'hsl(152 72% 36%)' : 'linear-gradient(135deg, hsl(152 72% 32%) 0%, hsl(162 65% 38%) 100%)',
+                background: loading ? 'hsl(152 55% 42%)' : 'linear-gradient(135deg, hsl(152 55% 42%) 0%, hsl(162 65% 38%) 100%)',
                 boxShadow: '0 4px 16px hsl(152 72% 32% / 0.35)',
               }}
               onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 24px hsl(152 72% 32% / 0.5)'; }}
@@ -201,7 +201,7 @@ export default function LoginPage() {
               New patient?{' '}
               <Link href="/auth/register">
                 <span className="font-semibold cursor-pointer transition-colors" style={{ color: 'hsl(152 72% 32%)' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 72% 25%)'; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 50% 36%)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 72% 32%)'; }}>
                   Create your account →
                 </span>
@@ -211,7 +211,7 @@ export default function LoginPage() {
               Doctor / Lab / Hospital?{' '}
               <Link href="/auth/apply">
                 <span className="font-semibold cursor-pointer transition-colors" style={{ color: 'hsl(152 72% 32%)' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 72% 25%)'; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 50% 36%)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'hsl(152 72% 32%)'; }}>
                   Apply for access →
                 </span>
@@ -221,9 +221,9 @@ export default function LoginPage() {
 
           {/* Trust badge */}
           <div className="mt-8 flex items-center gap-2 p-3 rounded-xl"
-               style={{ background: 'hsl(152 50% 96%)', border: '1px solid hsl(152 40% 88%)' }}>
+               style={{ background: 'hsl(152 50% 92%)', border: '1px solid hsl(152 40% 84%)' }}>
             <Leaf className="w-4 h-4 flex-shrink-0" style={{ color: 'hsl(152 72% 36%)' }} />
-            <p className="text-xs" style={{ color: 'hsl(152 40% 35%)' }}>
+            <p className="text-xs" style={{ color: 'hsl(152 28% 40%)' }}>
               Your health data is protected with AES-256 encryption and is never shared without your consent.
             </p>
           </div>

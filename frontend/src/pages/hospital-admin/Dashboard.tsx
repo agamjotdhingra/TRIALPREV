@@ -1,154 +1,114 @@
-import { useGetDashboardStats, useListWards } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bed, Users, HeartPulse, UserCircle } from "lucide-react";
+import { Link } from 'wouter';
+import { AlertTriangle, ArrowRight, BedDouble, HeartPulse, Stethoscope, UserPlus, Users } from 'lucide-react';
+import { useGetHospitalOverview, useListAdmissions, useListWards } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Avatar, Badge, Btn, Card, CardHeader, DataTable, Page, Progress, StatusPill } from '@/components/kit';
+import { ADMISSIONS, WARDS } from '@/data/demo';
+import { useSource } from '@/data/source';
 
 export default function HospitalDashboard() {
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
-  const { data: wards, isLoading: wardsLoading } = useListWards();
+  const { isDemo, entityId } = useAuth();
+  const ov = useGetHospitalOverview(isDemo ? null : entityId);
+  const wards = useSource(useListWards(), WARDS, (w: any) => ({ id: String(w.id), name: w.name, type: w.ward_type ?? '—', occupied: w.occupied_beds ?? 0, capacity: w.total_beds ?? 0 }));
+  const adm = useSource(useListAdmissions(), ADMISSIONS, (a: any) => ({ id: String(a.id), patient: a.patients?.full_name ?? 'Patient', reason: a.admission_reason ?? '', status: (a.status ?? '').replace(/^./, (c: string) => c.toUpperCase()), date: a.admission_date }));
 
-  if (statsLoading || wardsLoading) {
-    return <div className="p-8 text-center text-slate-400">Loading hospital data...</div>;
-  }
-
-  const occupancyRate = stats?.totalBeds ? ((stats.occupiedBeds || 0) / stats.totalBeds) * 100 : 0;
+  const o = isDemo || !ov.data ? { totalBeds: 160, occupiedBeds: 142, totalAdmitted: 142, icuPatients: 18, doctorsOnDuty: 42, nursesOnDuty: 86, availableBeds: 18 } : ov.data;
+  const pct = o.totalBeds ? Math.round((o.occupiedBeds / o.totalBeds) * 100) : 0;
+  const level = pct >= 85 ? 'Critical Level' : pct >= 70 ? 'High' : 'Normal';
+  const icu = wards.rows.find((w) => /icu|intensive/i.test(w.name + w.type));
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Hospital Command Center</h1>
-        <p className="text-slate-400 mt-1">Real-time bed occupancy, admissions tracking, and shift logistics.</p>
+    <Page>
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h1 className="font-display text-[32px] font-bold leading-tight text-ink">
+            Command <span className="text-brand-600">Center</span>
+          </h1>
+          <p className="mt-1 text-sm text-ink-3">Overview of hospital operations for {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+        </div>
+        <div className="flex gap-2.5">
+          <Btn variant="outline" href="/hospital/beds" icon={<BedDouble className="size-4" />}>
+            Bed Roster
+          </Btn>
+          <Btn href="/hospital/admissions?new=1" icon={<UserPlus className="size-4" />}>
+            New Admission
+          </Btn>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Occupied Beds */}
-        <Card className="bg-slate-900 border-slate-800 text-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-400">Occupied Beds</p>
-                <p className="text-2xl font-bold text-white">
-                  {stats?.occupiedBeds || 0} <span className="text-sm font-normal text-slate-400">/ {stats?.totalBeds || 0}</span>
-                </p>
-              </div>
-              <div className="h-10 w-10 bg-indigo-500/10 text-indigo-400 rounded-full flex items-center justify-center">
-                <Bed className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-4 h-2 w-full bg-slate-950 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-500"
-                style={{ width: `${Math.min(100, occupancyRate)}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr]">
+        <div className="relative overflow-hidden rounded-3xl btn-gradient p-7 text-white shadow-lift">
+          <div aria-hidden className="absolute -right-20 -top-20 size-64 rounded-full bg-white/10 blur-xl" />
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">Occupied Beds</p>
+          <p className="mt-3 font-display text-6xl font-extrabold num">
+            {o.occupiedBeds}
+            <span className="text-2xl font-semibold text-white/60"> / {o.totalBeds}</span>
+          </p>
+          <div className="mt-6 h-2.5 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-white transition-[width] duration-700" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="mt-3 flex items-center justify-between text-sm">
+            <span className="font-semibold">{pct}% Capacity</span>
+            <span className={pct >= 85 ? 'inline-flex items-center gap-1.5 rounded-full bg-red-500/90 px-2.5 py-0.5 text-xs font-bold' : 'text-white/80'}>
+              {pct >= 85 && <AlertTriangle className="size-3.5" />} {level}
+            </span>
+          </div>
+        </div>
 
-        {/* Admitted Patients */}
-        <Card className="bg-slate-900 border-slate-800 text-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-400">Admitted Patients</p>
-                <p className="text-2xl font-bold text-white">{stats?.totalAdmitted || 0}</p>
-              </div>
-              <div className="h-10 w-10 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center">
-                <Users className="h-5 w-5" />
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-4">Active inpatient records</p>
-          </CardContent>
-        </Card>
-
-        {/* ICU Patients */}
-        <Card className="bg-slate-900 border-slate-800 text-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-400">ICU Patients</p>
-                <p className="text-2xl font-bold text-red-400">{stats?.icuPatients || 0}</p>
-              </div>
-              <div className="h-10 w-10 bg-red-500/10 text-red-450 rounded-full flex items-center justify-center">
-                <HeartPulse className="h-5 w-5" />
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-4">Requires intensive monitoring</p>
-          </CardContent>
-        </Card>
-
-        {/* Staff on Duty */}
-        <Card className="bg-slate-900 border-slate-800 text-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-400">On Duty Staff</p>
-                <p className="text-2xl font-bold text-white">
-                  {stats?.doctorsOnDuty || 0} <span className="text-sm font-normal text-slate-400">Doc</span> + {stats?.nursesOnDuty || 0} <span className="text-sm font-normal text-slate-400">Nur</span>
-                </p>
-              </div>
-              <div className="h-10 w-10 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center">
-                <UserCircle className="h-5 w-5" />
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-4">Active on shift roster</p>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-2 gap-4">
+          <Stat icon={<Users />} label="Admitted Patients" value={o.totalAdmitted} sub={`${o.availableBeds ?? o.totalBeds - o.occupiedBeds} beds available`} />
+          <Stat icon={<HeartPulse />} label="ICU Patients" value={o.icuPatients} sub={icu ? `${icu.capacity - icu.occupied} beds remaining` : 'ICU monitored'} danger={!!icu && icu.capacity - icu.occupied <= 2} />
+          <Stat icon={<Stethoscope />} label="On Duty — Doctors" value={o.doctorsOnDuty} sub="Across all wards" />
+          <Stat icon={<Users />} label="On Duty — Nurses" value={o.nursesOnDuty} sub={`1 : ${Math.max(1, Math.round(o.totalAdmitted / Math.max(1, o.nursesOnDuty)))} nurse–patient ratio`} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <Card className="bg-slate-900 border-slate-800 text-white">
-          <CardHeader>
-            <CardTitle className="text-white">Ward Breakdown</CardTitle>
-            <CardDescription className="text-slate-400">Current occupancy rates by clinical department</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <div className="rounded-md border border-slate-800 overflow-hidden">
-              <Table className="text-slate-350">
-                <TableHeader className="bg-slate-850 border-slate-800">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Ward Name</TableHead>
-                    <TableHead className="text-slate-400">Type</TableHead>
-                    <TableHead className="text-slate-400">Occupancy</TableHead>
-                    <TableHead className="w-1/3 text-slate-400">Capacity Bar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {wards?.map((ward) => {
-                    const wardTotal = ward.total_beds || 0;
-                    const wardOcc = ward.occupied_beds || 0;
-                    const rate = wardTotal ? (wardOcc / wardTotal) * 100 : 0;
-                    let barColor = "bg-emerald-500";
-                    if (rate >= 90) barColor = "bg-red-500";
-                    else if (rate >= 75) barColor = "bg-orange-500";
-
-                    return (
-                      <TableRow key={ward.id} className="border-slate-800 hover:bg-slate-850/40">
-                        <TableCell className="font-semibold text-white">{ward.name}</TableCell>
-                        <TableCell className="uppercase text-xs tracking-wider text-slate-400">{ward.ward_type || "General"}</TableCell>
-                        <TableCell className="text-sm text-white font-medium">
-                          {wardOcc} / {wardTotal} ({rate.toFixed(0)}%)
-                        </TableCell>
-                        <TableCell>
-                          <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
-                            <div className={`h-full ${barColor}`} style={{ width: `${rate}%` }} />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {(!wards || wards.length === 0) && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={4} className="h-24 text-center text-slate-400">
-                        No wards defined for this hospital.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+        <Card className="overflow-hidden">
+          <CardHeader title="Ward Occupancy" subtitle="Live capacity by ward" action={<Link href="/hospital/wards" className="text-[13px] font-semibold text-brand-700 hover:underline">Manage wards</Link>} />
+          <DataTable
+            className="mt-5"
+            loading={wards.loading}
+            rows={wards.rows.slice(0, 6)}
+            rowKey={(w) => w.id}
+            columns={[
+              { key: 'n', header: 'Ward Name', cell: (w) => <span className="font-semibold text-ink">{w.name}</span> },
+              { key: 't', header: 'Type', hideOnMobile: true, cell: (w) => w.type },
+              { key: 'o', header: 'Occupancy', cell: (w) => <span className="num">{w.occupied}/{w.capacity} <span className="text-ink-4">({w.capacity ? Math.round((w.occupied / w.capacity) * 100) : 0}%)</span></span> },
+              { key: 'c', header: 'Capacity Status', cell: (w) => { const p = w.capacity ? (w.occupied / w.capacity) * 100 : 0; return <div className="flex w-40 items-center gap-2"><Progress value={p} height={6} /><Badge tone={p >= 90 ? 'red' : p >= 75 ? 'amber' : 'green'}>{p >= 90 ? 'Critical' : p >= 75 ? 'High' : 'Normal'}</Badge></div>; } },
+            ]}
+          />
+        </Card>
+        <Card>
+          <CardHeader title="Recent Admissions" action={<Link href="/hospital/admissions" className="text-[13px] font-semibold text-brand-700 hover:underline">View all</Link>} />
+          <div className="divide-y divide-line-soft px-5 pb-3 pt-3 sm:px-6">
+            {adm.rows.slice(0, 5).map((a) => (
+              <div key={a.id} className="flex items-center gap-3 py-3">
+                <Avatar name={a.patient} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{a.patient}</p>
+                  <p className="truncate text-xs text-ink-3">{a.reason}</p>
+                </div>
+                <StatusPill status={a.status} />
+              </div>
+            ))}
+          </div>
+          <Link href="/hospital/admissions" className="flex items-center justify-center gap-1.5 border-t border-line-soft py-3.5 text-[13px] font-semibold text-brand-700 hover:bg-brand-50/40">
+            Open admissions census <ArrowRight className="size-3.5" />
+          </Link>
         </Card>
       </div>
-    </div>
+    </Page>
+  );
+}
+
+function Stat({ icon, label, value, sub, danger }: { icon: React.ReactNode; label: string; value: number; sub: string; danger?: boolean }) {
+  return (
+    <Card className={danger ? 'border-red-100 bg-gradient-to-br from-white to-red-50/60 p-5' : 'p-5'}>
+      <span className={`inline-flex size-9 items-center justify-center rounded-xl [&_svg]:size-[18px] ${danger ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700'}`}>{icon}</span>
+      <p className="mt-4 text-[13px] text-ink-3">{label}</p>
+      <p className="num font-display text-3xl font-bold text-ink">{value}</p>
+      <p className={`mt-1 text-xs ${danger ? 'font-semibold text-red-600' : 'text-ink-3'}`}>{sub}</p>
+    </Card>
   );
 }

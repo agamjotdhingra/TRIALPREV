@@ -12,6 +12,10 @@ export async function apiRequest<T = unknown>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = await getToken();
+  // Demo mode: no backend session, so pages render with sample data instead.
+  if (!token && typeof localStorage !== 'undefined' && localStorage.getItem('prevntiv.demo')) {
+    throw new Error('DEMO_MODE');
+  }
 
   const res = await fetch(`${API_URL}/api${endpoint}`, {
     ...options,

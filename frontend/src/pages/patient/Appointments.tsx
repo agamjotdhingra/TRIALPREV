@@ -1,239 +1,251 @@
-import { useListAppointments, useListDoctors, useCreateAppointment, useUpdateAppointmentStatus } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Calendar, Clock, Plus, Loader2, XCircle } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { StatusBadge, TypeIcon } from "@/components/SharedHelpers";
-import { useAuth } from "@/auth/AuthContext";
+import { useEffect, useMemo, useState } from 'react';
+import { useSearch } from 'wouter';
+import { toast } from 'sonner';
+import { CalendarPlus, FlaskConical, MessageSquare, User, Video } from 'lucide-react';
+import { useCreateAppointment, useGetPatientMe, useListAppointments, useListDoctors, useUpdateAppointmentStatus } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Avatar, Btn, CapsuleTabs, Card, DataTable, Drawer, EmptyState, Field, InfoRow, Input, Modal, Page, PageHeader, Pagination, Select, StatusPill, Textarea, usePaged } from '@/components/kit';
+import { APPOINTMENTS, type Appt } from '@/data/demo';
+import { mapAppt } from '@/data/mappers';
+import { fmtDate, useSource } from '@/data/source';
+import { cn } from '@/lib/utils';
+
+const TYPE_ICON = { Video: Video, Chat: MessageSquare, 'In-Person': User } as const;
+const SLOTS = ['09:00 AM', '09:30 AM', '10:30 AM', '11:00 AM', '12:15 PM', '02:15 PM', '03:00 PM', '04:30 PM', '05:45 PM'];
+const DEMO_DOCTORS = [
+  { id: 1, full_name: 'Dr. Sarah Chen', specialization: 'Cardiology', consultation_fees: 1500 },
+  { id: 2, full_name: 'Dr. Amit Patel', specialization: 'Dermatology', consultation_fees: 1200 },
+  { id: 3, full_name: 'Dr. Emily Jones', specialization: 'General Practice', consultation_fees: 800 },
+  { id: 4, full_name: 'Dr. Rajesh Kumar', specialization: 'Pulmonology', consultation_fees: 900 },
+];
 
 export default function PatientAppointments() {
-  const { toast } = useToast();
-  const { profile } = useAuth();
-  const [open, setOpen] = useState(false);
-  const { data: appointments, isLoading, refetch } = useListAppointments();
-  const { data: doctors } = useListDoctors();
-  const createMutation = useCreateAppointment();
-  const cancelMutation = useUpdateAppointmentStatus(); // We use update status to mark as cancelled
+  const { isDemo } = useAuth();
+  const search = useSearch();
+  const src = useSource(useListAppointments(), APPOINTMENTS, mapAppt);
+  const [local, setLocal] = useState<Appt[]>([]);
+  const [cancelled, setCancelled] = useState<Record<string, boolean>>({});
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [tab, setTab] = useState<'All' | 'Upcoming' | 'Completed' | 'Cancelled'>('All');
+  const [bookOpen, setBookOpen] = useState(false);
+  const [notes, setNotes] = useState<Appt | null>(null);
+  const update = useUpdateAppointmentStatus();
 
-  const [form, setForm] = useState({
-    doctorId: "",
-    scheduledDate: "",
-    scheduledTime: "",
-    consultationType: "in-person",
-    reason: "",
-  });
+  useEffect(() => {
+    if (new URLSearchParams(search).get('book')) setBookOpen(true);
+  }, [search]);
 
-  async function handleBook(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.doctorId || !form.scheduledDate || !form.scheduledTime) {
-      toast({ title: "Validation Error", description: "Doctor, Date and Time are required.", variant: "destructive" });
-      return;
-    }
+  const rows = useMemo(() => {
+    const all = [...local, ...src.rows].map((a) => (cancelled[a.id] ? { ...a, status: 'Cancelled' as const } : a));
+    return all.filter((a) => tab === 'All' || (tab === 'Upcoming' ? a.status === 'Scheduled' : a.status === tab));
+  }, [local, src.rows, cancelled, tab]);
+  const paged = usePaged(rows, 8);
 
+  async function cancel(a: Appt) {
+    setCancelling(a.id);
     try {
-      await createMutation.mutateAsync({
-        patientId: profile?.entity_id,
-        doctorId: parseInt(form.doctorId, 10),
-        scheduledDate: form.scheduledDate,
-        scheduledTime: form.scheduledTime,
-        consultationType: form.consultationType,
-        reason: form.reason.trim() || null,
-      });
-
-      toast({ title: "Appointment Scheduled", description: "Your consultation has been successfully booked." });
-      setForm({ doctorId: "", scheduledDate: "", scheduledTime: "", consultationType: "in-person", reason: "" });
-      setOpen(false);
-      refetch();
-    } catch (err: any) {
-      toast({ title: "Booking failed", description: err.message, variant: "destructive" });
-    }
-  }
-
-  async function handleCancel(id: number) {
-    try {
-      await cancelMutation.mutateAsync({ id, status: "cancelled" });
-      toast({ title: "Cancelled", description: "Appointment has been cancelled." });
-      refetch();
-    } catch (err: any) {
-      toast({ title: "Cancel failed", description: err.message, variant: "destructive" });
+      if (!isDemo && !a.id.startsWith('local-')) await update.mutateAsync({ id: a.id, status: 'cancelled' });
+      else await new Promise((r) => setTimeout(r, 700));
+      setCancelled((c) => ({ ...c, [a.id]: true }));
+      toast.success(`Appointment with ${a.doctor} cancelled`);
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not cancel appointment');
+    } finally {
+      setCancelling(null);
     }
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">My Appointments</h1>
-          <p className="text-slate-400 mt-2 font-medium">Schedule and manage visits with your physicians.</p>
-        </div>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button id="book-appt-trigger" className="bg-blue-600 hover:bg-blue-500 text-white border-none gap-2 font-semibold">
-              <Plus className="h-4 w-4" /> Book Appointment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-white">Schedule Appointment</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleBook} className="space-y-4 pt-2">
-              <div className="space-y-1">
-                <Label className="text-slate-350">Select Doctor *</Label>
-                <Select value={form.doctorId} onValueChange={(v) => setForm((f) => ({ ...f, doctorId: v }))}>
-                  <SelectTrigger className="bg-slate-950 border-slate-850 text-white">
-                    <SelectValue placeholder="Choose a physician..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-950 border-slate-850 text-white">
-                    {doctors?.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)} className="focus:bg-slate-800">
-                        {d.full_name} ({d.specialization})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="date" className="text-slate-350">Date *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    required
-                    className="bg-slate-950 border-slate-850 text-white"
-                    value={form.scheduledDate}
-                    onChange={(e) => setForm((f) => ({ ...f, scheduledDate: e.target.value }))}
-                  />
+    <Page>
+      <PageHeader
+        title="Your Appointments"
+        subtitle="Manage your upcoming and past consultations."
+        actions={
+          <>
+            <Btn variant="outline" href="/patient/appointments/book-lab" icon={<FlaskConical className="size-4" />}>
+              Book Lab Test
+            </Btn>
+            <Btn onClick={() => setBookOpen(true)} icon={<CalendarPlus className="size-4" />}>
+              Book Appointment
+            </Btn>
+          </>
+        }
+      />
+      <CapsuleTabs className="mb-5" tabs={['All', 'Upcoming', 'Completed', 'Cancelled']} value={tab} onChange={setTab} />
+      <Card className="overflow-hidden">
+        {src.error && <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-[13px] text-red-700">{src.error}</p>}
+        <DataTable
+          loading={src.loading}
+          rows={paged.slice}
+          rowKey={(r) => r.id}
+          empty={<EmptyState icon={<CalendarPlus />} title="No appointments here" description="Book a consultation with a Prevntiv doctor in a few taps." action={<Btn size="sm" onClick={() => setBookOpen(true)}>Book Appointment</Btn>} />}
+          columns={[
+            {
+              key: 'dt',
+              header: 'Date & Time',
+              cell: (a) => (
+                <div>
+                  <p className="font-semibold text-ink">{fmtDate(a.date)}</p>
+                  <p className="text-xs text-ink-3">{a.time}</p>
                 </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="time" className="text-slate-350">Time *</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    required
-                    className="bg-slate-950 border-slate-850 text-white"
-                    value={form.scheduledTime}
-                    onChange={(e) => setForm((f) => ({ ...f, scheduledTime: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-slate-350">Consultation Mode</Label>
-                <Select value={form.consultationType} onValueChange={(v) => setForm((f) => ({ ...f, consultationType: v }))}>
-                  <SelectTrigger className="bg-slate-950 border-slate-850 text-white">
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-950 border-slate-850 text-white">
-                    <SelectItem value="in-person" className="focus:bg-slate-800">In-Person Visit</SelectItem>
-                    <SelectItem value="video" className="focus:bg-slate-800">Video Consultation</SelectItem>
-                    <SelectItem value="chat" className="focus:bg-slate-800">Chat Consultation</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="reason" className="text-slate-350">Reason for Visit</Label>
-                <Input
-                  id="reason"
-                  placeholder="e.g. Annual checkup, chest pain..."
-                  className="bg-slate-950 border-slate-850 text-white placeholder-slate-500"
-                  value={form.reason}
-                  onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-3">
-                <Button type="button" variant="outline" className="flex-1 border-slate-800 text-slate-400 hover:text-white" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending} className="flex-1 bg-blue-600 hover:bg-blue-505 text-white">
-                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Book Appointment"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <Card className="bg-slate-900 border-slate-800 text-white overflow-hidden">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="text-center py-12 text-slate-400">Loading appointments schedule...</div>
-          ) : !appointments || appointments.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-              <Calendar className="h-10 w-10 text-slate-655" />
-              <p className="font-medium">You have no appointments booked yet.</p>
-            </div>
-          ) : (
-            <Table className="text-slate-330">
-              <TableHeader className="bg-slate-850 border-slate-800">
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-slate-400">Date & Time</TableHead>
-                  <TableHead className="text-slate-400">Doctor</TableHead>
-                  <TableHead className="text-slate-400">Type</TableHead>
-                  <TableHead className="text-slate-400">Status</TableHead>
-                  <TableHead className="text-slate-400">Reason</TableHead>
-                  <TableHead className="text-slate-400 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.map((apt) => (
-                  <TableRow key={apt.id} className="border-slate-800 hover:bg-slate-850/40">
-                    <TableCell className="font-semibold text-white">
-                      <div className="flex flex-col">
-                        <span>{new Date(apt.scheduled_date || apt.scheduledDate).toLocaleDateString()}</span>
-                        <span className="text-xs text-slate-405 mt-1 flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" /> {apt.scheduled_time || apt.scheduledTime}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-white">{apt.doctorName || `Doctor #${apt.doctor_id}`}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-xs capitalize text-slate-400">
-                        <TypeIcon type={apt.consultation_type || apt.consultationType} />
-                        {apt.consultation_type || apt.consultationType}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={apt.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">{apt.reason || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {apt.status === "scheduled" && (
-                        <Button
-                          id={`cancel-appt-${apt.id}`}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 font-semibold gap-1.5"
-                          onClick={() => handleCancel(apt.id)}
-                          disabled={cancelMutation.isPending}
-                        >
-                          <XCircle className="h-4 w-4" /> Cancel
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+              ),
+            },
+            { key: 'doc', header: 'Doctor', cell: (a) => <div className="flex items-center gap-3"><Avatar name={a.doctor} size={34} /><div><p className="font-semibold text-ink">{a.doctor}</p><p className="text-xs text-ink-3">{a.specialty}</p></div></div> },
+            {
+              key: 'type',
+              header: 'Consultation Type',
+              hideOnMobile: true,
+              cell: (a) => {
+                const Icon = TYPE_ICON[a.type as keyof typeof TYPE_ICON] ?? User;
+                return (
+                  <span className="inline-flex items-center gap-2 text-ink-2">
+                    <Icon className="size-4 text-ink-3" /> {a.type}
+                  </span>
+                );
+              },
+            },
+            { key: 'status', header: 'Status', cell: (a) => <StatusPill status={a.status} /> },
+            { key: 'reason', header: 'Reason', hideOnMobile: true, cell: (a) => <span className="line-clamp-1 max-w-[220px]">{a.reason || '—'}</span> },
+            {
+              key: 'act',
+              header: 'Actions',
+              align: 'right',
+              cell: (a) =>
+                a.status === 'Scheduled' ? (
+                  <Btn size="xs" variant="danger-soft" loading={cancelling === a.id} onClick={() => cancel(a)}>
+                    {cancelling === a.id ? 'Canceling...' : 'Cancel'}
+                  </Btn>
+                ) : a.status === 'Completed' ? (
+                  <Btn size="xs" variant="secondary" onClick={() => setNotes(a)}>
+                    View Notes
+                  </Btn>
+                ) : (
+                  <span className="text-xs text-ink-4">—</span>
+                ),
+            },
+          ]}
+        />
+        {rows.length > 0 && <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onPage={paged.setPage} noun="appointments" />}
       </Card>
-    </div>
+
+      <BookAppointment
+        open={bookOpen}
+        onClose={() => setBookOpen(false)}
+        onBooked={(a) => {
+          setLocal((l) => [a, ...l]);
+          setTab('All');
+        }}
+      />
+
+      <Drawer open={!!notes} onClose={() => setNotes(null)} title="Consultation Notes" subtitle={notes ? `${notes.doctor} · ${fmtDate(notes.date)}` : ''}>
+        {notes && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4">
+              <InfoRow label="Specialty" value={notes.specialty} />
+              <InfoRow label="Type" value={notes.type} />
+              <InfoRow label="Reason" value={notes.reason} />
+              <InfoRow label="Status" value={<StatusPill status={notes.status} />} />
+            </div>
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-4">Summary</p>
+              <p className="text-sm leading-relaxed text-ink-2">Patient reviewed for {notes.reason.toLowerCase()}. Vitals stable. Current medication continued with no dose change. Advised hydration and 30 minutes of daily walking.</p>
+            </div>
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-4">Next steps</p>
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink-2">
+                <li>Repeat lipid profile in 8 weeks</li>
+                <li>Follow-up consultation after results</li>
+              </ul>
+            </div>
+            <Btn variant="secondary" href="/patient/prescriptions" block>
+              View linked prescription
+            </Btn>
+          </div>
+        )}
+      </Drawer>
+    </Page>
+  );
+}
+
+export function BookAppointment({ open, onClose, onBooked }: { open: boolean; onClose: () => void; onBooked: (a: Appt) => void }) {
+  const { isDemo } = useAuth();
+  const doctorsQ = useListDoctors();
+  const me = useGetPatientMe();
+  const create = useCreateAppointment();
+  const doctors: any[] = isDemo || !doctorsQ.data?.length ? DEMO_DOCTORS : doctorsQ.data;
+  const [form, setForm] = useState({ doctorId: '', date: '', time: '', type: 'video', reason: '' });
+  const [err, setErr] = useState('');
+  const doctor = doctors.find((d) => String(d.id) === form.doctorId);
+  const today = new Date().toISOString().slice(0, 10);
+
+  async function submit() {
+    if (!form.doctorId || !form.date || !form.time) return setErr('Choose a doctor, date and time slot.');
+    setErr('');
+    const appt: Appt = {
+      id: `local-${Date.now()}`,
+      date: form.date,
+      time: form.time,
+      doctor: doctor?.full_name ?? 'Doctor',
+      specialty: doctor?.specialization ?? '',
+      type: form.type === 'video' ? 'Video' : form.type === 'chat' ? 'Chat' : 'In-Person',
+      status: 'Scheduled',
+      reason: form.reason || 'Consultation',
+    };
+    try {
+      if (!isDemo) {
+        await create.mutateAsync({ patientId: me.data?.id, doctorId: Number(form.doctorId), scheduledDate: form.date, scheduledTime: form.time, consultationType: form.type, reason: form.reason || undefined });
+      } else onBooked(appt);
+      toast.success(`Booked with ${appt.doctor} on ${fmtDate(form.date, { day: 'numeric', month: 'short' })} at ${form.time}`);
+      setForm({ doctorId: '', date: '', time: '', type: 'video', reason: '' });
+      onClose();
+    } catch (e: any) {
+      setErr(e.message ?? 'Booking failed');
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Book an Appointment"
+      description="Pick a doctor and a time that suits you."
+      size="lg"
+      footer={
+        <>
+          <Btn variant="outline" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn onClick={submit} loading={create.isPending}>
+            Confirm Booking {doctor?.consultation_fees ? `· ₹${doctor.consultation_fees}` : ''}
+          </Btn>
+        </>
+      }
+    >
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Doctor" required className="sm:col-span-2">
+          <Select placeholder="Select a doctor" value={form.doctorId} onChange={(e) => setForm({ ...form, doctorId: e.target.value })} options={doctors.map((d) => ({ value: String(d.id), label: `${d.full_name} — ${d.specialization ?? ''}` }))} />
+        </Field>
+        <Field label="Date" required>
+          <Input type="date" min={today} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        </Field>
+        <Field label="Consultation Type">
+          <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} options={[{ value: 'video', label: 'Video' }, { value: 'in-person', label: 'In-Person' }, { value: 'chat', label: 'Chat' }]} />
+        </Field>
+        <Field label="Available Slots" required className="sm:col-span-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {SLOTS.map((s) => (
+              <button key={s} type="button" disabled={!form.date} onClick={() => setForm({ ...form, time: s })} className={cn('h-10 rounded-xl border text-[13px] font-semibold transition-all disabled:opacity-40', form.time === s ? 'border-brand-600 bg-brand-700 text-white' : 'border-line bg-white text-ink-2 hover:border-brand-300')}>
+                {s}
+              </button>
+            ))}
+          </div>
+          {!form.date && <p className="text-xs text-ink-3">Choose a date to see open slots.</p>}
+        </Field>
+        <Field label="Reason for visit" className="sm:col-span-2">
+          <Textarea className="min-h-[80px]" placeholder="Briefly describe your symptoms or reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        </Field>
+      </div>
+      {err && <p className="mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-700">{err}</p>}
+    </Modal>
   );
 }

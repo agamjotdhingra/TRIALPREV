@@ -1,318 +1,271 @@
-import { useState } from "react";
-import { useListDocuments, useCreateDocument, useGetPatientMe } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/api/supabase";
-import { del } from "@/api/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Upload, Trash2, Download, Loader2, Shield, FolderOpen } from "lucide-react";
+import { useMemo, useState } from 'react';
+import { Link } from 'wouter';
+import { useQueryClient } from '@tanstack/react-query';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { toast } from 'sonner';
+import { Download, Eye, FolderOpen, LayoutGrid, List, MoreHorizontal, Share2, ShieldCheck, Trash2, Upload, Users, X } from 'lucide-react';
+import { useListDocuments } from '@/api/hooks';
+import { del } from '@/api/client';
+import { useAuth } from '@/auth/AuthContext';
+import { Btn, Card, Checkbox, Chip, EmptyState, FileIcon, Modal, Page, PageHeader, Pagination, SearchInput, Skeleton, usePaged } from '@/components/kit';
+import { DOC_CATEGORIES, type Doc } from '@/data/demo';
+import { mapDoc } from '@/data/mappers';
+import { fmtDate } from '@/data/source';
+import { openStoredFile, store, useStore } from '@/data/store';
+import { cn } from '@/lib/utils';
 
-const DOCUMENT_CATEGORIES = [
-  "Medical ID Card",
-  "Insurance",
-  "Prior Prescription",
-  "Discharge Summary",
-  "Lab Result",
-  "Radiology / Scan",
-  "Vaccination Record",
-  "Other",
-];
+type D = Doc & { url?: string };
+
+export function usePatientDocs() {
+  const { isDemo } = useAuth();
+  const q = useListDocuments();
+  const demoDocs = useStore((s) => s.docs);
+  if (isDemo) return { docs: demoDocs as D[], loading: false, error: null as string | null, live: false };
+  return { docs: (q.data ?? []).map(mapDoc) as D[], loading: q.isLoading, error: q.isError ? (q.error as Error).message : null, live: true };
+}
 
 export default function PatientDocuments() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { data: patient } = useGetPatientMe();
-  const { data: documents, isLoading } = useListDocuments();
-  const createDocumentMutation = useCreateDocument();
+  const { docs, loading, error, live } = usePatientDocs();
+  const qc = useQueryClient();
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('All');
+  const [view, setView] = useState<'list' | 'grid'>('list');
+  const [selecting, setSelecting] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [category, setCategory] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
+  const cats = ['All', ...DOC_CATEGORIES.filter((c) => docs.some((d) => d.category === c))];
+  const rows = useMemo(() => docs.filter((d) => (cat === 'All' || d.category === cat) && d.name.toLowerCase().includes(q.toLowerCase())), [docs, q, cat]);
+  const paged = usePaged(rows, view === 'grid' ? 9 : 6);
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const exitSelect = () => { setSelecting(false); setSel(new Set()); };
 
-  // Custom local delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: (id: string | number) => del(`/documents/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      toast({
-        title: "Document deleted",
-        description: "The document has been removed from your profile.",
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Delete failed",
-        description: err.message || "Could not delete document.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file || !category) {
-      toast({
-        title: "Missing fields",
-        description: "Please select a file and a category.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!patient?.id) {
-      toast({
-        title: "Error",
-        description: "Patient profile not loaded.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsUploading(true);
+  async function open(d: D) {
     try {
-      const fileExt = file.name.split(".").pop();
-      const randomId = Math.random().toString(36).substring(2, 10);
-      const storageFileName = `${Date.now()}_${randomId}.${fileExt}`;
-      const storageFilePath = `${patient.id}/${storageFileName}`;
+      await openStoredFile(d.url);
+    } catch (e: any) {
+      toast.info(e.message);
+    }
+  }
 
-      // 1. Upload to Supabase Storage documents bucket
-      const { error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(storageFilePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // 2. Create document record via Express backend
-      await createDocumentMutation.mutateAsync({
-        fileName: file.name,
-        fileUrl: storageFilePath,
-        category,
-        mimeType: file.type,
-      });
-
-      toast({
-        title: "Document uploaded",
-        description: `"${file.name}" uploaded successfully.`,
-      });
-
-      // Clear state
-      setFile(null);
-      setCategory("");
-      // Reset input element
-      const fileInput = document.getElementById("file-upload") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-    } catch (err: any) {
-      toast({
-        title: "Upload failed",
-        description: err.message || "Failed to upload file.",
-        variant: "destructive",
-      });
+  async function remove(ids: string[]) {
+    setBusy(true);
+    try {
+      if (live) {
+        await Promise.all(ids.map((id) => del(`/documents/${id}`)));
+        qc.invalidateQueries({ queryKey: ['documents'] });
+        toast.success(`${ids.length} document${ids.length > 1 ? 's' : ''} deleted`);
+      } else {
+        store.set((s) => ({
+          docs: s.docs.filter((d) => !ids.includes(d.id)),
+          deleted: [...s.docs.filter((d) => ids.includes(d.id)).map((d) => ({ ...d, deletedAt: new Date().toISOString() })), ...s.deleted],
+        }));
+        toast.success(`${ids.length} moved to Recently Deleted`, { action: { label: 'Undo', onClick: () => store.set((s) => ({ docs: [...s.deleted.filter((d) => ids.includes(d.id)), ...s.docs], deleted: s.deleted.filter((d) => !ids.includes(d.id)) })) } });
+      }
+      exitSelect();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not delete');
     } finally {
-      setIsUploading(false);
+      setBusy(false);
+      setConfirm(null);
     }
-  };
-
-  const handleDownload = async (fileUrl: string, fileName: string) => {
-    try {
-      if (fileUrl.startsWith("http")) {
-        window.open(fileUrl, "_blank");
-        return;
-      }
-
-      // Generate signed URL for private bucket
-      const { data, error } = await supabase.storage
-        .from("documents")
-        .createSignedUrl(fileUrl, 60);
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, "_blank");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Download failed",
-        description: err.message || "Could not retrieve access link.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  if (isLoading) {
-    return <div className="p-8 text-center text-slate-400">Loading documents...</div>;
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-          <FolderOpen className="h-8 w-8 text-blue-500" />
-          My Documents
-        </h1>
-        <p className="text-slate-400 mt-2">
-          Securely upload and store your personal health credentials, prescriptions, ID cards, or insurance policies.
-        </p>
+    <Page>
+      <PageHeader
+        title="My Documents"
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>{live ? `${docs.length} files` : '42.8 MB used of 5 GB'}</span>
+            <Link href="/patient/access" className="inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline">
+              <Users className="size-3.5" /> Who Has Access
+            </Link>
+            <Link href="/patient/documents/deleted" className="inline-flex items-center gap-1.5 font-semibold text-ink-2 hover:text-brand-700">
+              <Trash2 className="size-3.5" /> Recently Deleted
+            </Link>
+          </span>
+        }
+        actions={
+          <Btn href="/patient/documents/upload" icon={<Upload className="size-4" />}>
+            Upload Document
+          </Btn>
+        }
+      />
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <SearchInput className="flex-1" value={q} onChange={setQ} placeholder="Search documents..." />
+        {selecting ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-brand-800">{sel.size} selected</span>
+            <Btn size="sm" variant="outline" onClick={exitSelect}>
+              Cancel
+            </Btn>
+          </div>
+        ) : (
+          <Btn size="sm" variant="outline" className="h-10" onClick={() => setSelecting(true)} disabled={!docs.length}>
+            Select
+          </Btn>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Upload Form */}
-        <div className="lg:col-span-1">
-          <Card className="bg-slate-900 border-slate-800 text-white sticky top-8">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Upload className="h-5 w-5 text-blue-400" /> Upload File
-              </CardTitle>
-              <CardDescription className="text-slate-400">
-                Uploaded files are stored securely in a private bucket.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleUpload} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-slate-350">Category *</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="bg-slate-950 border-slate-800 text-white focus:ring-slate-700">
-                      <SelectValue placeholder="Select type..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-950 border-slate-800 text-white">
-                      {DOCUMENT_CATEGORIES.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="focus:bg-slate-850 hover:bg-slate-850">
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {cats.map((c) => (
+            <Chip key={c} size="sm" selected={cat === c} onClick={() => setCat(c)}>
+              {c}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-ink-3">{rows.length} Total Documents</span>
+          <div className="flex rounded-lg bg-slate-100 p-0.5">
+            {(['list', 'grid'] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)} aria-label={`${v} view`} className={cn('rounded-md p-1.5 transition-colors', view === v ? 'bg-white text-brand-700 shadow-sm' : 'text-ink-3 hover:text-ink')}>
+                {v === 'list' ? <List className="size-4" /> : <LayoutGrid className="size-4" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="file-upload" className="text-slate-350">File *</Label>
-                  <div className="border border-dashed border-slate-800 rounded-lg p-6 bg-slate-950 hover:bg-slate-900 transition flex flex-col items-center justify-center text-center cursor-pointer relative">
-                    <input
-                      id="file-upload"
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                    <Upload className="h-8 w-8 text-slate-500 mb-2" />
-                    <p className="text-sm font-medium text-slate-300">
-                      {file ? file.name : "Click to select a file"}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      PDF, DOC, DOCX, JPEG, PNG (max 10MB)
-                    </p>
+      {error && <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p>}
+
+      {loading ? (
+        <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
+      ) : rows.length === 0 ? (
+        <Card>
+          <EmptyState icon={<FolderOpen />} title={q || cat !== 'All' ? 'No documents match' : 'No documents yet'} description="Upload discharge summaries, insurance cards, prescriptions and more — all encrypted." action={<Btn size="sm" href="/patient/documents/upload">Upload Document</Btn>} />
+        </Card>
+      ) : view === 'list' ? (
+        <Card className="divide-y divide-line-soft overflow-hidden">
+          {paged.slice.map((d) => (
+            <div key={d.id} onClick={selecting ? () => toggle(d.id) : undefined} className={cn('group flex items-center gap-4 px-5 py-4 transition-colors', selecting ? 'cursor-pointer' : '', sel.has(d.id) ? 'bg-brand-50/60' : 'hover:bg-slate-50/70')}>
+              {selecting && <Checkbox round checked={sel.has(d.id)} onChange={() => toggle(d.id)} />}
+              <FileIcon name={d.name} size={44} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">{d.name}</p>
+                <p className="mt-0.5 truncate text-xs text-ink-3">
+                  {d.category} · {fmtDate(d.date, { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {d.size && ` · ${d.size}`}
+                </p>
+                {(d.sharedWith || d.finalizedBy) && (
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
+                    {d.finalizedBy ? <ShieldCheck className="size-3.5" /> : <Users className="size-3.5" />}
+                    {d.finalizedBy ? `Finalized by ${d.finalizedBy}` : `Shared with ${d.sharedWith}`}
+                  </p>
+                )}
+              </div>
+              {!selecting && <RowActions onPreview={() => open(d)} onDelete={() => setConfirm([d.id])} />}
+            </div>
+          ))}
+          <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onPage={paged.setPage} noun="documents" />
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {paged.slice.map((d) => (
+              <Card key={d.id} onClick={selecting ? () => toggle(d.id) : undefined} className={cn('relative p-5 transition-all hover:shadow-lift', selecting && 'cursor-pointer', sel.has(d.id) && 'ring-2 ring-brand-400')}>
+                {selecting && <Checkbox round className="absolute right-4 top-4" checked={sel.has(d.id)} onChange={() => toggle(d.id)} />}
+                <FileIcon name={d.name} size={52} />
+                <p className="mt-4 truncate text-sm font-semibold text-ink">{d.name}</p>
+                <p className="mt-0.5 text-xs text-ink-3">{d.category} · {fmtDate(d.date, { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                {!selecting && (
+                  <div className="mt-4 flex justify-between">
+                    <Btn size="xs" variant="secondary" onClick={() => open(d)} icon={<Eye className="size-3.5" />}>
+                      Preview
+                    </Btn>
+                    <RowActions compact onPreview={() => open(d)} onDelete={() => setConfirm([d.id])} />
                   </div>
-                </div>
+                )}
+              </Card>
+            ))}
+          </div>
+          <div className="mt-4 rounded-2xl bg-white shadow-card">
+            <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onPage={paged.setPage} noun="documents" />
+          </div>
+        </>
+      )}
 
-                <Button
-                  type="submit"
-                  disabled={isUploading || !file || !category}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white border-none gap-2 font-semibold"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" /> Upload Document
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-6 z-30 flex justify-center px-4 animate-fade-up">
+          <div className="flex w-full max-w-xl items-center justify-between gap-3 rounded-full bg-ink px-3 py-2.5 pl-6 text-white shadow-2xl">
+            <button className="text-sm font-semibold text-brand-200 hover:text-white" onClick={() => setSel(sel.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)))}>
+              {sel.size === rows.length ? 'Clear selection' : `Select all ${rows.length}`}
+            </button>
+            <div className="flex gap-2">
+              <Btn size="sm" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white" disabled={!sel.size} href={sel.size ? '/patient/access/grant' : undefined} icon={<Share2 className="size-4" />}>
+                Share
+              </Btn>
+              <Btn size="sm" variant="danger" disabled={!sel.size} onClick={() => setConfirm([...sel])} icon={<Trash2 className="size-4" />}>
+                Delete
+              </Btn>
+              <button onClick={exitSelect} className="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white" aria-label="Exit select mode">
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Documents Table */}
-        <div className="lg:col-span-2">
-          <Card className="bg-slate-900 border-slate-800 text-white">
-            <CardHeader>
-              <CardTitle className="text-white">Uploaded Health Documents</CardTitle>
-              <CardDescription className="text-slate-400">
-                You have {documents?.length || 0} secure files stored.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table className="text-slate-350">
-                <TableHeader className="bg-slate-950/40">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">File Name</TableHead>
-                    <TableHead className="text-slate-400">Category</TableHead>
-                    <TableHead className="text-slate-400">Uploaded At</TableHead>
-                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {documents?.map((doc) => (
-                    <TableRow key={doc.id} className="border-slate-800 hover:bg-slate-850/40">
-                      <TableCell className="max-w-[240px] truncate">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-slate-400 shrink-0" />
-                          <span className="font-medium text-white">{doc.file_name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">{doc.category}</TableCell>
-                      <TableCell className="text-xs font-mono">
-                        {new Date(doc.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDownload(doc.file_url, doc.file_name)}
-                          className="text-blue-400 hover:text-white hover:bg-slate-800"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => deleteMutation.mutate(doc.id)}
-                          className="text-red-400 hover:text-white hover:bg-red-950/40"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {(!documents || documents.length === 0) && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={4} className="h-32 text-center text-slate-400">
-                        <div className="flex flex-col items-center justify-center gap-2 py-4">
-                          <Shield className="h-8 w-8 text-slate-600" />
-                          <p>No documents uploaded yet.</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <Modal
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
+        size="sm"
+        icon={<span className="inline-flex size-14 items-center justify-center rounded-full bg-red-50 text-red-600"><Trash2 className="size-6" /></span>}
+        title={`Delete ${confirm?.length ?? 0} document${(confirm?.length ?? 0) > 1 ? 's' : ''}?`}
+        description={live ? 'This permanently removes the file from your records and cannot be undone.' : 'Deleted documents stay in Recently Deleted for 30 days.'}
+        footer={
+          <>
+            <Btn variant="outline" onClick={() => setConfirm(null)}>
+              Cancel
+            </Btn>
+            <Btn variant="danger" loading={busy} onClick={() => confirm && remove(confirm)}>
+              Delete
+            </Btn>
+          </>
+        }
+      />
+    </Page>
+  );
+}
+
+function RowActions({ onPreview, onDelete, compact }: { onPreview: () => void; onDelete: () => void; compact?: boolean }) {
+  const item = 'flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-2 outline-none data-[highlighted]:bg-slate-50';
+  return (
+    <div className="flex items-center gap-1">
+      {!compact && (
+        <>
+          <button onClick={onPreview} className="rounded-lg p-2 text-ink-3 transition-colors hover:bg-brand-50 hover:text-brand-700" aria-label="Preview">
+            <Eye className="size-4" />
+          </button>
+          <button onClick={onPreview} className="rounded-lg p-2 text-ink-3 transition-colors hover:bg-brand-50 hover:text-brand-700" aria-label="Download">
+            <Download className="size-4" />
+          </button>
+        </>
+      )}
+      <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Trigger className="rounded-lg p-2 text-ink-3 outline-none transition-colors hover:bg-slate-100 hover:text-ink" aria-label="More options">
+          <MoreHorizontal className="size-4" />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-[170px] rounded-xl border border-line-soft bg-white p-1 shadow-lift">
+            <DropdownMenu.Item className={item} onSelect={onPreview}>
+              <Download className="size-4" /> Download
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={item} asChild>
+              <Link href="/patient/access/grant">
+                <Share2 className="size-4" /> Share with doctor
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="my-1 h-px bg-line-soft" />
+            <DropdownMenu.Item className={cn(item, 'text-red-600 data-[highlighted]:bg-red-50')} onSelect={onDelete}>
+              <Trash2 className="size-4" /> Delete
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

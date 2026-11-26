@@ -1,304 +1,291 @@
 import { useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useParams } from 'wouter';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, FileCheck2, Hourglass, Mail, ShieldCheck, X } from 'lucide-react';
 import { post } from '@/api/client';
-import { ShieldCheck, CheckCircle, ArrowRight, Stethoscope, FlaskConical, Building2 } from 'lucide-react';
+import { Badge, Btn, Callout, Field, Input, Select, Stepper, UploadZone } from '@/components/kit';
+import { AuthFrame } from '@/pages/public/AuthFrame';
+import { cn } from '@/lib/utils';
 
-type ApplyRole = 'doctor' | 'lab_admin' | 'hospital_admin';
+type Kind = 'professional' | 'hospital' | 'lab';
 
-const ROLE_OPTIONS: { value: ApplyRole; label: string; desc: string; Icon: any }[] = [
-  { value: 'doctor', label: 'Doctor', desc: 'Medical practitioner', Icon: Stethoscope },
-  { value: 'lab_admin', label: 'Lab', desc: 'Diagnostic laboratory', Icon: FlaskConical },
-  { value: 'hospital_admin', label: 'Hospital', desc: 'Hospital administrator', Icon: Building2 },
-];
+const DOCS: Record<Kind, string[]> = {
+  professional: ['Registration Certificate', 'Medical Degree / Government ID'],
+  hospital: ['Healthcare Facility License', 'NABH/JCI Accreditation', 'Authorized Signatory Proof'],
+  lab: ['Healthcare Facility License', 'GST Registration ID', 'Authorized Signatory Proof'],
+};
+
+const SPECIALIZATIONS = ['Cardiology', 'General Practice', 'Dermatology', 'Endocrinology', 'Neurology', 'Orthopedics', 'Pediatrics', 'Pulmonology', 'Gynecology', 'Psychiatry', 'Physiotherapy', 'Clinical Nutrition', 'Internal Medicine', 'Oncology'];
 
 export default function ApplyPage() {
-  const [role, setRole] = useState<ApplyRole>('doctor');
+  const params = useParams<{ kind?: string }>();
+  const kind: Kind = params.kind === 'hospital' || params.kind === 'lab' ? params.kind : 'professional';
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState<Record<string, string>>({ practice: 'Doctor' });
+  const [files, setFiles] = useState<Record<string, File | undefined>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [form, setForm] = useState({
-    fullName: '', email: '', mobile: '',
-    // Doctor fields
-    specialization: '', qualification: '', yearsOfExperience: '',
-    licenseNumber: '', consultationFees: '', bio: '',
-    // Lab fields
-    labName: '', registrationNumber: '', address: '',
-    // Hospital fields
-    hospitalName: '', totalBeds: '',
-  });
+  const [submitError, setSubmitError] = useState('');
+  const up = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  function update(k: string, v: string) { setForm(f => ({ ...f, [k]: v })); }
+  const isFacility = kind !== 'professional';
+  const facilityLabel = kind === 'hospital' ? 'Hospital' : 'Lab';
+  const steps = isFacility ? [`${facilityLabel} Details`, 'Verification', 'Under Review'] : ['Your Details', 'Credentials', 'Under Review'];
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
+  function validateDetails() {
+    const e: Record<string, string> = {};
+    const req = (k: string, msg: string) => !form[k]?.trim() && (e[k] = msg);
+    if (isFacility) {
+      req('orgName', 'Enter the official registered name.');
+      req('registrationNumber', 'Registration number is required.');
+      req('category', 'Select a category.');
+      req('address', 'Enter the primary address.');
+      req('city', 'Required');
+      req('state', 'Required');
+      req('fullName', 'Enter the contact person.');
+    } else {
+      req('fullName', 'Enter your full name as per records.');
+      req('qualification', 'Select your highest qualification.');
+      req('specialization', 'Select a specialization.');
+      if (form.years === undefined || form.years === '') e.years = 'Required';
+    }
+    if (!/^\S+@\S+\.\S+$/.test(form.email ?? '')) e.email = 'Enter a valid email address.';
+    if ((form.mobile ?? '').replace(/\D/g, '').length < 10) e.mobile = 'Enter a valid 10-digit number.';
+    setErrors(e);
+    return !Object.keys(e).length;
+  }
+
+  async function submit() {
+    const e: Record<string, string> = {};
+    if (!isFacility && !form.licenseNumber?.trim()) e.licenseNumber = 'License number is required.';
+    DOCS[kind].forEach((d) => !files[d] && (e[d] = 'Please upload this document.'));
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    setSubmitError('');
     setLoading(true);
+    const base = { fullName: form.fullName, email: form.email, mobile: form.mobile.replace(/\D/g, '') };
+    const address = [form.address, form.city, form.state].filter(Boolean).join(', ');
+    const body =
+      kind === 'professional'
+        ? { role: 'doctor', ...base, specialization: form.specialization, qualification: form.qualification, yearsOfExperience: parseInt(form.years) || 0, licenseNumber: form.licenseNumber, bio: `${form.practice}` }
+        : kind === 'lab'
+          ? { role: 'lab_admin', ...base, labName: form.orgName, registrationNumber: form.registrationNumber, address }
+          : { role: 'hospital_admin', ...base, hospitalName: form.orgName, registrationNumber: form.registrationNumber, address, totalBeds: form.beds ? parseInt(form.beds) : undefined };
     try {
-      const body: Record<string, unknown> = { role, fullName: form.fullName, email: form.email, mobile: form.mobile };
-      if (role === 'doctor') {
-        Object.assign(body, { specialization: form.specialization, qualification: form.qualification, yearsOfExperience: parseInt(form.yearsOfExperience) || 0, licenseNumber: form.licenseNumber, consultationFees: form.consultationFees ? parseFloat(form.consultationFees) : undefined, bio: form.bio });
-      } else if (role === 'lab_admin') {
-        Object.assign(body, { labName: form.labName, registrationNumber: form.registrationNumber, address: form.address });
-      } else {
-        Object.assign(body, { hospitalName: form.hospitalName, registrationNumber: form.registrationNumber, address: form.address, totalBeds: form.totalBeds ? parseInt(form.totalBeds) : undefined });
-      }
       await post('/auth/apply', body);
-      setSuccess(true);
+      setStep(2);
     } catch (err: any) {
-      setError(err.message);
+      setSubmitError(err.message === 'DEMO_MODE' ? 'Exit the demo to submit a real application.' : err.message || 'Submission failed. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  const inputCls = 'w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none transition-all';
-  const inputStyle = { background: 'hsl(150 30% 97%)', border: '1.5px solid hsl(150 20% 88%)', color: 'hsl(152 30% 10%)' };
-  const inputFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    e.target.style.borderColor = 'hsl(152 72% 36%)';
-    e.target.style.boxShadow = '0 0 0 3px hsl(152 72% 36% / 0.12)';
-  };
-  const inputBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    e.target.style.borderColor = 'hsl(150 20% 88%)';
-    e.target.style.boxShadow = 'none';
-  };
-  const labelCls = 'block text-xs font-semibold mb-1 uppercase tracking-wide';
-  const labelStyle = { color: 'hsl(152 30% 30%)' };
-
-  if (success) return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'hsl(150 30% 97%)' }}>
-      <div className="w-full max-w-md text-center">
-        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-             style={{ background: 'linear-gradient(135deg, hsl(152 55% 40%) 0%, hsl(162 52% 46%) 100%)', boxShadow: '0 8px 32px hsl(152 72% 32% / 0.35)' }}>
-          <CheckCircle className="w-10 h-10 text-white" />
-        </div>
-        <h2 className="text-3xl font-bold mb-3" style={{ color: 'hsl(152 30% 10%)' }}>Application Submitted!</h2>
-        <p className="mb-8" style={{ color: 'hsl(150 15% 45%)' }}>
-          Our team will review your application and send you an email invite once approved. This typically takes 1–2 business days.
-        </p>
-        <Link href="/auth/login">
-          <span className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white cursor-pointer transition-all"
-                style={{ background: 'linear-gradient(135deg, hsl(152 55% 38%) 0%, hsl(162 52% 44%) 100%)', boxShadow: '0 4px 16px hsl(152 72% 32% / 0.35)' }}>
-            Back to Login <ArrowRight className="w-4 h-4" />
-          </span>
-        </Link>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>
-      {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden"
-           style={{ background: 'linear-gradient(145deg, hsl(152 45% 18%) 0%, hsl(152 50% 28%) 50%, hsl(162 48% 22%) 100%)' }}>
-        <div className="absolute inset-0 opacity-5"
-             style={{ backgroundImage: 'radial-gradient(circle, hsl(0 0% 100%) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-        <div className="absolute bottom-0 -right-16 w-72 h-72 rounded-full opacity-15"
-             style={{ background: 'radial-gradient(circle, hsl(162 65% 55%) 0%, transparent 70%)' }} />
+    <AuthFrame back={step === 0 ? { href: `/auth/login?role=${kind === 'professional' ? 'doctor' : kind}`, label: 'Back to login' } : undefined} right={step > 0 ? <span /> : undefined}>
+      <div className="w-full max-w-[720px] rounded-[28px] border border-white bg-white/90 p-6 shadow-[0_24px_60px_-24px_rgb(1_92_61/0.22)] backdrop-blur-xl sm:p-10 animate-fade-up">
+        <Stepper steps={steps} current={step} className="mx-auto max-w-md" />
 
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-               style={{ background: 'hsl(152 50% 42% / 0.3)', border: '1px solid hsl(152 50% 50% / 0.4)' }}>
-            <ShieldCheck className="w-5 h-5" style={{ color: 'hsl(152 35% 72%)' }} />
-          </div>
-          <span className="text-white font-bold text-xl tracking-tight">preventiv</span>
-        </div>
+        {step === 0 && (
+          <form
+            className="mt-10"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (validateDetails()) setStep(1);
+            }}
+          >
+            <h1 className="font-display text-[26px] font-bold text-ink">{isFacility ? `${facilityLabel} Details` : 'Professional Sign Up'}</h1>
+            <p className="mt-1.5 text-sm text-ink-3">{isFacility ? 'Please provide the primary information for your healthcare facility.' : 'Join the Prevntiv care network. Applications are verified within 24–48 hours.'}</p>
 
-        <div className="relative z-10 space-y-4">
-          <h2 className="text-3xl font-bold text-white">Join the Preventiv<br />professional network.</h2>
-          <p style={{ color: 'hsl(152 28% 72%)' }}>
-            Connect with patients, manage appointments, and streamline your practice — all in one trusted platform.
-          </p>
-          <div className="space-y-2 pt-2">
-            {[
-              'Verified professional badge',
-              'Digital appointment management',
-              'Integrated prescriptions & reports',
-              'Secure patient data access',
-            ].map(t => (
-              <div key={t} className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 flex-shrink-0" style={{ color: 'hsl(152 72% 55%)' }} />
-                <span className="text-sm" style={{ color: 'hsl(152 28% 75%)' }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="relative z-10 text-xs" style={{ color: 'hsl(152 20% 45%)' }}>
-          © 2025 Preventiv Health Technologies Pvt. Ltd.
-        </p>
-      </div>
-
-      {/* Right — form */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 overflow-y-auto" style={{ background: '#fff' }}>
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-               style={{ background: 'linear-gradient(135deg, hsl(152 55% 40%) 0%, hsl(162 52% 46%) 100%)' }}>
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-xl" style={{ color: 'hsl(152 55% 42%)' }}>preventiv</span>
-        </div>
-
-        <div className="w-full max-w-lg">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold mb-1" style={{ color: 'hsl(152 30% 10%)' }}>Professional Access Application</h1>
-            <p className="text-sm" style={{ color: 'hsl(150 15% 50%)' }}>Select your role and submit your credentials for review.</p>
-          </div>
-
-          {/* Role selector */}
-          <div className="grid grid-cols-3 gap-3 mb-7">
-            {ROLE_OPTIONS.map(({ value, label, desc, Icon }) => (
-              <button key={value} type="button" onClick={() => setRole(value)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl text-sm font-semibold transition-all"
-                style={role === value ? {
-                  background: 'linear-gradient(135deg, hsl(152 72% 32% / 0.1) 0%, hsl(162 65% 38% / 0.1) 100%)',
-                  border: '2px solid hsl(152 72% 40%)',
-                  color: 'hsl(152 72% 30%)',
-                  boxShadow: '0 0 0 4px hsl(152 72% 36% / 0.08)',
-                } : {
-                  background: 'hsl(150 30% 97%)',
-                  border: '1.5px solid hsl(150 20% 88%)',
-                  color: 'hsl(150 15% 45%)',
-                }}>
-                <Icon className="w-5 h-5" />
-                <div className="text-center">
-                  <div>{label}</div>
-                  <div className="text-xs font-normal opacity-70">{desc}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {error && (
-            <div className="rounded-xl px-4 py-3 mb-5 flex items-start gap-3"
-                 style={{ background: 'hsl(4 86% 58% / 0.08)', border: '1px solid hsl(4 86% 58% / 0.25)', color: 'hsl(4 72% 45%)' }}>
-              <span className="text-base mt-0.5">⚠️</span>
-              <span className="text-sm">{error}</span>
+            <div className="mt-8 grid gap-5 sm:grid-cols-2">
+              {isFacility ? (
+                <>
+                  <Field label={kind === 'hospital' ? 'Hospital/Organisation Name' : 'Organisation Name'} className="sm:col-span-2" error={errors.orgName} required>
+                    <Input placeholder="Enter official registered name" value={form.orgName ?? ''} onChange={(e) => up('orgName', e.target.value)} invalid={!!errors.orgName} />
+                  </Field>
+                  <Field label="Registration Number" error={errors.registrationNumber} required>
+                    <Input placeholder="e.g. REG-12345678" value={form.registrationNumber ?? ''} onChange={(e) => up('registrationNumber', e.target.value.toUpperCase())} invalid={!!errors.registrationNumber} />
+                  </Field>
+                  <Field label="Category" error={errors.category} required>
+                    <Select
+                      placeholder="Select category"
+                      value={form.category ?? ''}
+                      onChange={(e) => up('category', e.target.value)}
+                      options={kind === 'hospital' ? ['Multi-speciality Hospital', 'Super-speciality Hospital', 'Clinic / Nursing Home', 'Government Hospital', 'Maternity Centre'] : ['Pathology Lab', 'Diagnostic Imaging Centre', 'Collection Centre', 'Reference Laboratory']}
+                    />
+                  </Field>
+                  <Field label="Primary Address" className="sm:col-span-2" error={errors.address} required>
+                    <Input placeholder="Street address" value={form.address ?? ''} onChange={(e) => up('address', e.target.value)} invalid={!!errors.address} />
+                  </Field>
+                  <Field label="City" error={errors.city} required>
+                    <Input placeholder="City" value={form.city ?? ''} onChange={(e) => up('city', e.target.value)} invalid={!!errors.city} />
+                  </Field>
+                  <Field label="State/Province" error={errors.state} required>
+                    <Input placeholder="State or Province" value={form.state ?? ''} onChange={(e) => up('state', e.target.value)} invalid={!!errors.state} />
+                  </Field>
+                  <Field label="Contact Person" error={errors.fullName} required>
+                    <Input placeholder="Full name" value={form.fullName ?? ''} onChange={(e) => up('fullName', e.target.value)} invalid={!!errors.fullName} />
+                  </Field>
+                  <Field label="Phone Number" error={errors.mobile} required>
+                    <Input inputMode="tel" placeholder="+91 98765 43210" value={form.mobile ?? ''} onChange={(e) => up('mobile', e.target.value)} invalid={!!errors.mobile} />
+                  </Field>
+                  <Field label="Official Email" error={errors.email} required className={kind === 'hospital' ? '' : 'sm:col-span-2'}>
+                    <Input type="email" placeholder="admin@facility.in" value={form.email ?? ''} onChange={(e) => up('email', e.target.value)} invalid={!!errors.email} />
+                  </Field>
+                  {kind === 'hospital' && (
+                    <Field label="Total Beds">
+                      <Input inputMode="numeric" placeholder="e.g. 250" value={form.beds ?? ''} onChange={(e) => up('beds', e.target.value.replace(/\D/g, ''))} />
+                    </Field>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Field label="I practise as" className="sm:col-span-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      {['Doctor', 'Physiotherapist', 'Nutritionist'].map((p) => (
+                        <button key={p} type="button" onClick={() => up('practice', p)} className={cn('h-11 rounded-xl border text-sm font-semibold transition-all', form.practice === p ? 'border-brand-500 bg-brand-50 text-brand-800 ring-4 ring-brand-100' : 'border-line bg-white text-ink-2 hover:border-brand-300')}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Full Name (as per records)" className="sm:col-span-2" error={errors.fullName} required>
+                    <Input placeholder="Dr. Jane Doe" value={form.fullName ?? ''} onChange={(e) => up('fullName', e.target.value)} invalid={!!errors.fullName} />
+                  </Field>
+                  <Field label="Professional Email" error={errors.email} required>
+                    <Input type="email" placeholder="jane.doe@clinic.com" value={form.email ?? ''} onChange={(e) => up('email', e.target.value)} invalid={!!errors.email} />
+                  </Field>
+                  <Field label="Mobile Number" error={errors.mobile} required>
+                    <Input inputMode="tel" placeholder="+91 98765 43210" value={form.mobile ?? ''} onChange={(e) => up('mobile', e.target.value)} invalid={!!errors.mobile} />
+                  </Field>
+                  <Field label="Highest Qualification" error={errors.qualification} required>
+                    <Select placeholder="Select qualification" value={form.qualification ?? ''} onChange={(e) => up('qualification', e.target.value)} options={['MBBS', 'MBBS, MD', 'MBBS, MS', 'MBBS, DM / MCh', 'BDS / MDS', 'BPT / MPT', 'M.Sc Clinical Nutrition', 'BAMS / BHMS']} />
+                  </Field>
+                  <Field label="Years of Experience" error={errors.years} required>
+                    <Input inputMode="numeric" placeholder="e.g. 8" value={form.years ?? ''} onChange={(e) => up('years', e.target.value.replace(/\D/g, '').slice(0, 2))} invalid={!!errors.years} />
+                  </Field>
+                  <Field label="Specialization" className="sm:col-span-2" error={errors.specialization} required>
+                    <Input list="specializations" placeholder="Search specialization..." value={form.specialization ?? ''} onChange={(e) => up('specialization', e.target.value)} invalid={!!errors.specialization} />
+                    <datalist id="specializations">
+                      {SPECIALIZATIONS.map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </Field>
+                </>
+              )}
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'hsl(152 30% 28%)' }}>Personal Information</h3>
-            <div>
-              <label className={labelCls} style={labelStyle}>Full Name *</label>
-              <input className={inputCls} style={inputStyle} required value={form.fullName}
-                onChange={e => update('fullName', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="Dr. John Smith" />
+            <div className="mt-10 flex justify-end border-t border-line-soft pt-6">
+              <Btn type="submit" iconRight={<ArrowRight className="size-4" />}>
+                Continue
+              </Btn>
             </div>
-            <div>
-              <label className={labelCls} style={labelStyle}>Email *</label>
-              <input type="email" className={inputCls} style={inputStyle} required value={form.email}
-                onChange={e => update('email', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="doctor@clinic.com" />
-            </div>
-            <div>
-              <label className={labelCls} style={labelStyle}>Mobile *</label>
-              <input className={inputCls} style={inputStyle} required value={form.mobile}
-                onChange={e => update('mobile', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="+91 9876543210" />
-            </div>
-
-            {role === 'doctor' && (
-              <>
-                <h3 className="text-sm font-bold uppercase tracking-wider pt-2" style={{ color: 'hsl(152 30% 28%)' }}>Professional Details</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls} style={labelStyle}>Specialization *</label>
-                    <input className={inputCls} style={inputStyle} required value={form.specialization}
-                      onChange={e => update('specialization', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="Cardiology" />
-                  </div>
-                  <div>
-                    <label className={labelCls} style={labelStyle}>Experience (years) *</label>
-                    <input type="number" className={inputCls} style={inputStyle} required min="0" value={form.yearsOfExperience}
-                      onChange={e => update('yearsOfExperience', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Qualification *</label>
-                  <input className={inputCls} style={inputStyle} required value={form.qualification}
-                    onChange={e => update('qualification', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="MBBS, MD" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls} style={labelStyle}>License Number</label>
-                    <input className={inputCls} style={inputStyle} value={form.licenseNumber}
-                      onChange={e => update('licenseNumber', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                  </div>
-                  <div>
-                    <label className={labelCls} style={labelStyle}>Consultation Fees (₹)</label>
-                    <input type="number" className={inputCls} style={inputStyle} value={form.consultationFees}
-                      onChange={e => update('consultationFees', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Bio / About</label>
-                  <textarea className={inputCls + ' resize-none'} style={{ ...inputStyle, display: 'block' } as any} rows={3} value={form.bio}
-                    onChange={e => update('bio', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="Brief introduction..." />
-                </div>
-              </>
-            )}
-
-            {role === 'lab_admin' && (
-              <>
-                <h3 className="text-sm font-bold uppercase tracking-wider pt-2" style={{ color: 'hsl(152 30% 28%)' }}>Lab Details</h3>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Lab Name *</label>
-                  <input className={inputCls} style={inputStyle} required value={form.labName}
-                    onChange={e => update('labName', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="Apollo Diagnostics" />
-                </div>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Registration Number *</label>
-                  <input className={inputCls} style={inputStyle} required value={form.registrationNumber}
-                    onChange={e => update('registrationNumber', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                </div>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Address</label>
-                  <input className={inputCls} style={inputStyle} value={form.address}
-                    onChange={e => update('address', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="Full address" />
-                </div>
-              </>
-            )}
-
-            {role === 'hospital_admin' && (
-              <>
-                <h3 className="text-sm font-bold uppercase tracking-wider pt-2" style={{ color: 'hsl(152 30% 28%)' }}>Hospital Details</h3>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Hospital Name *</label>
-                  <input className={inputCls} style={inputStyle} required value={form.hospitalName}
-                    onChange={e => update('hospitalName', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} placeholder="City General Hospital" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls} style={labelStyle}>Registration No. *</label>
-                    <input className={inputCls} style={inputStyle} required value={form.registrationNumber}
-                      onChange={e => update('registrationNumber', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                  </div>
-                  <div>
-                    <label className={labelCls} style={labelStyle}>Total Beds</label>
-                    <input type="number" className={inputCls} style={inputStyle} value={form.totalBeds}
-                      onChange={e => update('totalBeds', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls} style={labelStyle}>Address</label>
-                  <input className={inputCls} style={inputStyle} value={form.address}
-                    onChange={e => update('address', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
-                </div>
-              </>
-            )}
-
-            <button id="apply-submit" type="submit" disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-60 mt-2"
-              style={{ background: 'linear-gradient(135deg, hsl(152 72% 32%) 0%, hsl(162 65% 38%) 100%)', boxShadow: '0 4px 16px hsl(152 72% 32% / 0.35)' }}>
-              {loading ? 'Submitting...' : <><span>Submit Application</span><ArrowRight className="w-4 h-4" /></>}
-            </button>
           </form>
+        )}
 
-          <p className="text-center text-sm mt-6" style={{ color: 'hsl(150 15% 50%)' }}>
-            Already have access?{' '}
-            <Link href="/auth/login">
-              <span className="font-semibold cursor-pointer" style={{ color: 'hsl(152 72% 32%)' }}>Sign in</span>
-            </Link>
-          </p>
-        </div>
+        {step === 1 && (
+          <div className="mt-10">
+            <button onClick={() => setStep(0)} className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-brand-700">
+              <ArrowLeft className="size-4" /> Back to step 1
+            </button>
+            <h1 className="font-display text-[26px] font-bold text-ink">{isFacility ? 'Document Verification' : 'Upload Credentials'}</h1>
+            <p className="mt-1.5 text-sm text-ink-3">
+              {isFacility
+                ? 'Please provide the necessary documentation to verify your facility. Files should be in PDF or JPEG format, max 5MB each.'
+                : 'Please provide your medical license number and upload the required documentation to verify your professional status.'}
+            </p>
+            {!isFacility && (
+              <Field label={<span className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-3">Medical license number</span>} className="mt-8" error={errors.licenseNumber} required>
+                <Input placeholder="e.g. MD-12345678" value={form.licenseNumber ?? ''} onChange={(e) => up('licenseNumber', e.target.value.toUpperCase())} invalid={!!errors.licenseNumber} />
+              </Field>
+            )}
+            <div className={cn('mt-6 grid gap-4', DOCS[kind].length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3')}>
+              {DOCS[kind].map((doc) => (
+                <div key={doc}>
+                  <p className="mb-2 text-[13px] font-semibold text-ink-2">{doc}</p>
+                  {files[doc] ? (
+                    <div className="flex h-[148px] flex-col items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-center">
+                      <FileCheck2 className="size-7 text-brand-600" />
+                      <p className="w-full truncate text-xs font-semibold text-ink">{files[doc]!.name}</p>
+                      <button onClick={() => setFiles((f) => ({ ...f, [doc]: undefined }))} className="inline-flex items-center gap-1 text-xs font-medium text-ink-3 hover:text-red-600">
+                        <X className="size-3" /> Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <UploadZone
+                      compact
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      title="Upload or drop file"
+                      hint="PDF or JPEG, max 5MB"
+                      onFiles={([f]) => {
+                        if (f.size > 5 * 1024 * 1024) return setErrors((e) => ({ ...e, [doc]: 'File is larger than 5MB.' }));
+                        setErrors((e) => ({ ...e, [doc]: '' }));
+                        setFiles((x) => ({ ...x, [doc]: f }));
+                      }}
+                    />
+                  )}
+                  {errors[doc] && <p className="mt-1.5 text-xs font-medium text-red-600">{errors[doc]}</p>}
+                </div>
+              ))}
+            </div>
+            <Callout tone="green" icon={<ShieldCheck />} className="mt-6">
+              Documents are encrypted in transit and only visible to the Prevntiv verification team.
+            </Callout>
+            {submitError && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-[13px] font-medium text-red-700">{submitError}</p>}
+            <div className="mt-10 flex justify-between border-t border-line-soft pt-6">
+              <Btn variant="ghost" onClick={() => setStep(0)} icon={<ArrowLeft className="size-4" />}>
+                Back
+              </Btn>
+              <Btn onClick={submit} loading={loading} iconRight={<ArrowRight className="size-4" />}>
+                Submit for Verification
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="mt-10 text-center">
+            <span className="relative mx-auto inline-flex size-20 items-center justify-center rounded-full bg-amber-50 text-amber-600 ring-8 ring-amber-50/60">
+              <Hourglass className="size-9 animate-[spin_4s_ease-in-out_infinite]" />
+            </span>
+            <div className="mt-6">
+              <Badge tone="amber" dot upper>
+                Under Review
+              </Badge>
+            </div>
+            <h1 className="mt-4 font-display text-[26px] font-bold text-ink">Application submitted</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-ink-2">
+              Thanks, {form.fullName?.split(' ')[0] || 'there'}. Our verification team is reviewing your {isFacility ? 'facility documents' : 'credentials'}. This usually takes 24–48 hours.
+            </p>
+            <div className="mx-auto mt-8 max-w-md space-y-3 rounded-2xl bg-slate-50 p-5 text-left ring-1 ring-line-soft">
+              {[
+                { icon: CheckCircle2, t: 'Application received', s: 'Just now', done: true },
+                { icon: Clock3, t: 'Credential & document verification', s: 'In progress', done: false },
+                { icon: Mail, t: `Login details sent to ${form.email}`, s: 'After approval', done: false },
+              ].map((r) => (
+                <div key={r.t} className="flex items-start gap-3">
+                  <r.icon className={cn('mt-0.5 size-5 shrink-0', r.done ? 'text-brand-600' : 'text-ink-4')} />
+                  <div>
+                    <p className="text-sm font-semibold text-ink">{r.t}</p>
+                    <p className="text-xs text-ink-3">{r.s}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Btn variant="outline" href="/welcome">
+                Back to Home
+              </Btn>
+              <Btn href="/role?intent=login">Explore Prevntiv</Btn>
+            </div>
+            <p className="mt-6 text-xs text-ink-3">
+              Questions? <a href="mailto:verify@prevntiv.in" className="font-semibold text-brand-700 hover:underline">verify@prevntiv.in</a>
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+      <span className="sr-only">
+        <Link href="/welcome">Home</Link>
+      </span>
+    </AuthFrame>
   );
 }

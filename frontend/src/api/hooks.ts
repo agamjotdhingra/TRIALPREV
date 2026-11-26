@@ -141,7 +141,7 @@ export function useCreateAppointment() {
 export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
   return useMutation<any, Error, { id: number | string; status: string } & any>({
-    mutationFn: ({ id, ...body }) => patch(`/appointments/${id}/status`, body),
+    mutationFn: ({ id, ...body }) => patch(`/appointments/${id}`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -367,6 +367,35 @@ export function useRejectApplication() {
     mutationFn: (id) => post(`/auth/applications/${id}/reject`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
+  });
+}
+
+// ── HOSPITAL OVERVIEW ─────────────────────────────────────────────────────────
+export function useGetHospitalOverview(hospitalId?: number | null) {
+  return useQuery<any>({
+    queryKey: ['hospital', hospitalId, 'overview'],
+    queryFn: () => get(`/hospitals/${hospitalId}/overview`),
+    enabled: !!hospitalId,
+  });
+}
+
+export function useUpdateBed() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, any>({
+    mutationFn: ({ id, ...body }) => patch(`/beds/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['beds'] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, void>({
+    mutationFn: () => patch('/notifications/read-all', {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

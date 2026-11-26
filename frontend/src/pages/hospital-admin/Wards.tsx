@@ -1,183 +1,141 @@
-import { useListWards, useCreateWard } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Search, Plus, LayoutGrid, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Building, Minus, Plus } from 'lucide-react';
+import { useCreateWard, useListWards } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Badge, Btn, Card, EmptyState, Field, Input, Modal, Page, PageHeader, Progress, SearchInput, Select, Skeleton } from '@/components/kit';
+import { WARDS } from '@/data/demo';
+import { useSource } from '@/data/source';
+
+type W = { id: string; name: string; type: string; occupied: number; capacity: number };
+const status = (p: number) => (p >= 90 ? 'Critical' : p >= 75 ? 'Warning' : 'Safe');
+const TYPES = ['General Medical', 'Surgical', 'Intensive Care', 'Pediatric', 'Maternity', 'Emergency', 'Oncology', 'Cardiology'];
 
 export default function HospitalWards() {
-  const { toast } = useToast();
-  const [search, setSearch] = useState("");
+  const { isDemo } = useAuth();
+  const src = useSource(useListWards(), WARDS, (w: any): W => ({ id: String(w.id), name: w.name, type: w.ward_type ?? 'General', occupied: w.occupied_beds ?? 0, capacity: w.total_beds ?? 0 }));
+  const create = useCreateWard();
+  const [added, setAdded] = useState<W[]>([]);
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
+  const [st, setSt] = useState('');
   const [open, setOpen] = useState(false);
-  const { data: wards, isLoading, refetch } = useListWards();
-  const createWardMutation = useCreateWard();
+  const [form, setForm] = useState({ name: '', type: 'General Medical', beds: 10 });
+  const [err, setErr] = useState('');
 
-  const [form, setForm] = useState({
-    name: "",
-    wardType: "General",
-    totalBeds: "10",
-  });
+  const all = [...added, ...src.rows];
+  const rows = useMemo(() => all.filter((w) => (w.name + w.type).toLowerCase().includes(q.toLowerCase()) && (!type || w.type === type) && (!st || status(w.capacity ? (w.occupied / w.capacity) * 100 : 0) === st)), [all, q, type, st]);
 
-  const filteredWards = wards?.filter(
-    (w) =>
-      w.name.toLowerCase().includes(search.toLowerCase()) ||
-      w.ward_type?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  async function handleAddWard(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-
+  async function submit() {
+    if (form.name.trim().length < 2) return setErr('Ward name is required.');
+    if (form.beds < 1) return setErr('Capacity must be at least 1 bed.');
+    setErr('');
     try {
-      await createWardMutation.mutateAsync({
-        name: form.name.trim(),
-        ward_type: form.wardType,
-        total_beds: parseInt(form.totalBeds, 10),
-      });
-
-      toast({ title: "Success", description: `Ward "${form.name}" has been created.` });
-      setForm({ name: "", wardType: "General", totalBeds: "10" });
+      if (!isDemo) await create.mutateAsync({ name: form.name.trim(), ward_type: form.type, total_beds: form.beds, occupied_beds: 0, available_beds: form.beds });
+      else setAdded((a) => [{ id: `w-${Date.now()}`, name: form.name.trim(), type: form.type, occupied: 0, capacity: form.beds }, ...a]);
+      toast.success(`${form.name} created with ${form.beds} beds`);
+      setForm({ name: '', type: 'General Medical', beds: 10 });
       setOpen(false);
-      refetch();
-    } catch (err: any) {
-      toast({ title: "Failed to create ward", description: err.message, variant: "destructive" });
+    } catch (e: any) {
+      setErr(e.message);
     }
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Ward Management</h1>
-          <p className="text-slate-400 mt-2">Monitor capacity, configure bed spaces, and track department utilization.</p>
-        </div>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button id="add-ward-trigger" className="bg-violet-650 hover:bg-violet-600 text-white border-none gap-2">
-              <Plus className="h-4 w-4" /> Add Ward
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-white">Create Hospital Ward</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAddWard} className="space-y-4 pt-2">
-              <div className="space-y-1">
-                <Label htmlFor="wardName" className="text-slate-350">Ward Name *</Label>
-                <Input
-                  id="wardName"
-                  required
-                  placeholder="e.g. ICU Wing A"
-                  className="bg-slate-950 border-slate-850 text-white placeholder-slate-500"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="wardType" className="text-slate-350">Ward Type / Specialization</Label>
-                <Input
-                  id="wardType"
-                  placeholder="e.g. ICU, General, Pediatrics"
-                  className="bg-slate-950 border-slate-850 text-white placeholder-slate-500"
-                  value={form.wardType}
-                  onChange={(e) => setForm((f) => ({ ...f, wardType: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="totalBeds" className="text-slate-350">Initial Bed Capacity</Label>
-                <Input
-                  id="totalBeds"
-                  type="number"
-                  min="1"
-                  className="bg-slate-950 border-slate-850 text-white placeholder-slate-500"
-                  value={form.totalBeds}
-                  onChange={(e) => setForm((f) => ({ ...f, totalBeds: e.target.value }))}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-3">
-                <Button type="button" variant="outline" className="flex-1 border-slate-800 text-slate-400 hover:text-white" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createWardMutation.isPending} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white">
-                  {createWardMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex items-center gap-4 max-w-md">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Search wards by name or type..."
-            className="pl-9 bg-slate-900 border-slate-800 text-white placeholder-slate-500 focus-visible:ring-slate-700"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="text-center py-12 text-slate-400">Loading wards...</div>
+    <Page>
+      <PageHeader title="Ward Management" subtitle="Monitor occupancy and manage hospital beds" actions={<Btn onClick={() => setOpen(true)} icon={<Plus className="size-4" />}>Create Ward</Btn>} />
+      <Card className="mb-6 flex flex-col gap-3 p-3 md:flex-row">
+        <SearchInput className="flex-1" value={q} onChange={setQ} placeholder="Search wards by name or type..." />
+        <Select className="h-10 md:w-48" placeholder="All Types" value={type} onChange={(e) => setType(e.target.value)} options={Array.from(new Set(all.map((w) => w.type)))} />
+        <Select className="h-10 md:w-44" placeholder="All Status" value={st} onChange={(e) => setSt(e.target.value)} options={['Safe', 'Warning', 'Critical']} />
+      </Card>
+      {src.error && <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{src.error}</p>}
+      {src.loading ? (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-56 rounded-2xl" />)}</div>
+      ) : rows.length === 0 ? (
+        <Card>
+          <EmptyState icon={<Building />} title="No wards found" description="Create your first ward to start allocating beds." action={<Btn size="sm" onClick={() => setOpen(true)}>Create Ward</Btn>} />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredWards?.map((ward) => {
-            const total = ward.total_beds || 0;
-            const occ = ward.occupied_beds || 0;
-            const rate = total ? (occ / total) * 100 : 0;
-            const available = total - occ;
-
-            let barColor = "bg-emerald-500";
-            if (rate >= 90) barColor = "bg-red-500";
-            else if (rate >= 75) barColor = "bg-orange-500";
-
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((w) => {
+            const p = w.capacity ? Math.round((w.occupied / w.capacity) * 100) : 0;
+            const s = status(p);
             return (
-              <Card key={ward.id} className="bg-slate-900 border-slate-800 text-white">
-                <CardHeader className="pb-3 border-b border-slate-800">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-base text-white">{ward.name}</CardTitle>
-                      <CardDescription className="uppercase mt-1 text-[10px] tracking-wider font-bold text-slate-400">
-                        {ward.ward_type || "General"}
-                      </CardDescription>
-                    </div>
-                    <LayoutGrid className="h-5 w-5 text-slate-500" />
+              <Card key={w.id} className="p-6 transition-all hover:-translate-y-0.5 hover:shadow-lift">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-lg font-bold text-ink">{w.name}</h3>
+                    <p className="text-[13px] text-ink-3">{w.type}</p>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm text-slate-300">
-                      <span className="text-slate-400">Occupancy</span>
-                      <span className="font-semibold text-white">{occ} / {total} Beds</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
-                      <div className={`h-full ${barColor} transition-all`} style={{ width: `${rate}%` }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span>{available} Available</span>
-                      <span>{rate.toFixed(0)}% Full</span>
-                    </div>
+                  <Badge tone={s === 'Critical' ? 'red' : s === 'Warning' ? 'amber' : 'green'} dot>
+                    {s}
+                  </Badge>
+                </div>
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-ink-3">Occupancy</p>
+                    <p className="num font-display text-xl font-bold text-ink">
+                      {w.occupied}/{w.capacity} <span className="text-xs font-medium text-ink-3">Beds</span>
+                    </p>
                   </div>
-                </CardContent>
+                  <div>
+                    <p className="text-xs text-ink-3">Available</p>
+                    <p className={`num font-display text-xl font-bold ${w.capacity - w.occupied <= 2 ? 'text-red-600' : 'text-brand-700'}`}>{w.capacity - w.occupied}</p>
+                  </div>
+                </div>
+                <div className="mt-5">
+                  <div className="mb-1.5 flex justify-between text-xs">
+                    <span className="text-ink-3">Occupancy %</span>
+                    <span className="num font-semibold text-ink">{p}%</span>
+                  </div>
+                  <Progress value={p} />
+                </div>
+                <Btn variant="outline" size="sm" block className="mt-6" href="/hospital/beds">
+                  View beds
+                </Btn>
               </Card>
             );
           })}
-          {filteredWards?.length === 0 && (
-            <div className="col-span-full py-12 text-center text-slate-400 bg-slate-900/50 rounded-lg border border-dashed border-slate-800">
-              No wards match your filters.
-            </div>
-          )}
         </div>
       )}
-    </div>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Create New Ward"
+        footer={
+          <>
+            <Btn variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Btn>
+            <Btn loading={create.isPending} onClick={submit}>
+              Create Ward
+            </Btn>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <Field label="Ward Name" required error={err && !form.name ? err : undefined}>
+            <Input autoFocus placeholder="e.g. Oncology Wing West" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Ward Type/Specialization">
+            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} options={TYPES} />
+          </Field>
+          <Field label="Initial Bed Capacity">
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setForm({ ...form, beds: Math.max(1, form.beds - 1) })} className="inline-flex size-11 items-center justify-center rounded-xl border border-line text-ink-2 hover:bg-slate-50" aria-label="Decrease">
+                <Minus className="size-4" />
+              </button>
+              <Input className="w-24 text-center num" inputMode="numeric" value={form.beds} onChange={(e) => setForm({ ...form, beds: Math.min(500, Number(e.target.value.replace(/\D/g, '')) || 0) })} />
+              <button type="button" onClick={() => setForm({ ...form, beds: Math.min(500, form.beds + 1) })} className="inline-flex size-11 items-center justify-center rounded-xl border border-line text-ink-2 hover:bg-slate-50" aria-label="Increase">
+                <Plus className="size-4" />
+              </button>
+            </div>
+          </Field>
+          {err && form.name && <p className="rounded-xl bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-700">{err}</p>}
+        </div>
+      </Modal>
+    </Page>
   );
 }

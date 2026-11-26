@@ -1,433 +1,288 @@
-import { useParams, Link, useLocation } from "wouter";
-import { useGetPatient, useGetPatientHealthScore, useListAppointments, useListPrescriptions, useListReports } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ChevronLeft, FileText, Calendar, Activity, Pill, AlertTriangle, QrCode, Download } from "lucide-react";
-import { RiskBadge, StatusBadge, TypeIcon } from "@/components/SharedHelpers";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { QRCodeSVG } from "qrcode.react";
-import { useRef } from "react";
-import { useReactToPrint } from "react-to-print";
-import { useAuth } from "@/auth/AuthContext";
+import { useState } from 'react';
+import { Link, useLocation, useParams } from 'wouter';
+import { QRCodeSVG } from 'qrcode.react';
+import { AlertTriangle, CalendarDays, ClipboardList, Droplets, FileText, FlaskConical, HeartPulse, Pill, ShieldCheck, Stethoscope, Thermometer, Activity } from 'lucide-react';
+import { useGetPatient, useGetPatientMe, useListAppointments, useListPrescriptions, useListReports } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Avatar, Badge, Btn, CapsuleTabs, Card, CardHeader, DataTable, EmptyState, InfoRow, Page, ScoreRing, Skeleton, StatusPill } from '@/components/kit';
+import { TrendChart } from '@/components/kit/charts';
+import { APPOINTMENTS, LAB_REPORTS, ME, MY_PATIENTS, PRESCRIPTIONS, QUEUE, SERIES, type LabReport, type Rx } from '@/data/demo';
+import { mapAppt, mapReport, mapRx } from '@/data/mappers';
+import { fmtDate, parseList } from '@/data/source';
+import { RxDrawer } from '@/pages/patient/Prescriptions';
+import { ReportDrawer } from '@/pages/patient/Reports';
 
-function PrescriptionPrintable({ rx }: { rx: any }) {
-  let medicines: string[] = [];
-  try { medicines = JSON.parse(rx.medicines); } catch { medicines = [rx.medicines]; }
-  return (
-    <div style={{ fontFamily: "Georgia, serif", maxWidth: 680, margin: "0 auto", padding: 40, backgroundColor: "#fff", color: "#000" }}>
-      <div style={{ borderBottom: "3px solid #1e3a5f", paddingBottom: 16, marginBottom: 24 }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "#1e3a5f", letterSpacing: 1 }}>HealthOS</div>
-        <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Preventive Healthcare Platform — Digital Prescription</div>
-      </div>
+type Tab = 'Overview' | 'Appointments' | 'Prescriptions' | 'Lab Reports' | 'Discharge Summaries';
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, fontSize: 13 }}>
-        <div>
-          <div style={{ color: "#888", marginBottom: 3 }}>Patient</div>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>{rx.patientName || "—"}</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ color: "#888", marginBottom: 3 }}>Prescribing Doctor</div>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>{rx.doctorName || "—"}</div>
-          <div style={{ color: "#888", fontSize: 12, marginTop: 4 }}>
-            {new Date(rx.created_at || rx.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ background: "#f0f4ff", borderRadius: 8, padding: "12px 18px", marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>Diagnosis</div>
-        <div style={{ fontWeight: 600, fontSize: 15, color: "#1e3a5f" }}>{rx.diagnosis}</div>
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Prescribed Medicines</div>
-        {medicines.map((med, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid #eee" }}>
-            <div style={{ minWidth: 22, height: 22, borderRadius: "50%", background: "#1e3a5f", color: "#fff", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-            <div style={{ fontSize: 14, color: "#222" }}>{typeof med === "object" ? JSON.stringify(med) : med}</div>
-          </div>
-        ))}
-      </div>
-
-      {rx.instructions && (
-        <div style={{ background: "#fffbea", border: "1px solid #f0d060", borderRadius: 8, padding: "12px 18px", marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 4, textTransform: "uppercase" }}>Instructions</div>
-          <div style={{ fontSize: 13, color: "#333" }}>{rx.instructions}</div>
-        </div>
-      )}
-
-      {rx.follow_up_date && (
-        <div style={{ fontSize: 13, color: "#555", marginBottom: 24 }}>
-          <strong>Follow-up Date:</strong> {new Date(rx.follow_up_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-        </div>
-      )}
-
-      <div style={{ borderTop: "1px dashed #ccc", paddingTop: 16, fontSize: 11, color: "#aaa", display: "flex", justifyContent: "space-between" }}>
-        <span>This is a digitally generated prescription from HealthOS Platform.</span>
-        <span>Rx #{rx.id}</span>
-      </div>
-    </div>
-  );
-}
-
-function PrintablePrescriptionWrapper({ rx }: { rx: any }) {
-  const printRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Prescription-${rx.id}-${rx.patientName ?? "patient"}`,
-  });
-
-  return (
-    <div>
-      <Button className="w-full mb-4 gap-2 bg-blue-600 hover:bg-blue-500 text-white border-none" onClick={() => handlePrint()}>
-        <Download className="h-4 w-4" /> Download / Print PDF
-      </Button>
-      <div ref={printRef}>
-        <PrescriptionPrintable rx={rx} />
-      </div>
-    </div>
-  );
-}
-
-interface PatientEHRProps {
-  patientId?: number;
-  [key: string]: any;
-}
-
-export default function PatientEHR({ patientId }: PatientEHRProps) {
+export default function PatientEHR() {
   const params = useParams<{ id?: string }>();
-  const { profile } = useAuth();
   const [location] = useLocation();
+  const { isDemo, role } = useAuth();
+  const self = role === 'patient';
+  const id = params.id ?? '';
+  const meQ = useGetPatientMe();
+  const pQ = useGetPatient(self || isDemo ? '' : id);
+  const live = isDemo ? null : self ? meQ.data : pQ.data;
+  const pid = live?.id;
+  const apptQ = useListAppointments(pid ? { patientId: pid } : {}, { query: { enabled: !isDemo && !!pid } });
+  const rxQ = useListPrescriptions(pid ? { patientId: pid } : {});
+  const repQ = useListReports(pid ? { patientId: pid } : {});
+  const [tab, setTab] = useState<Tab>('Overview');
+  const [rx, setRx] = useState<Rx | null>(null);
+  const [rep, setRep] = useState<LabReport | null>(null);
 
-  // Determine which patient record to view
-  const activeId = (patientId ?? (params.id ? parseInt(params.id, 10) : profile?.entity_id)) || undefined;
+  const demoPerson = [...MY_PATIENTS, ...QUEUE.map((q) => ({ id: q.id, name: q.name, gender: q.gender, age: q.age, healthId: q.pid, blood: q.blood, score: q.score ?? 70, risk: q.risk }))].find((p) => p.id === id);
+  const loading = !isDemo && (self ? meQ.isLoading : pQ.isLoading);
+  const error = !isDemo && (self ? meQ.error : pQ.error);
 
-  const { data: patient, isLoading } = useGetPatient(activeId!, { query: { enabled: !!activeId } });
-  const { data: score } = useGetPatientHealthScore(activeId!, { query: { enabled: !!activeId } });
-  const { data: appointments } = useListAppointments({ patientId: activeId }, { query: { enabled: !!activeId } });
-  const { data: prescriptions } = useListPrescriptions({ patientId: activeId });
-  const { data: reports } = useListReports({ patientId: activeId });
+  const p = live
+    ? {
+        name: live.full_name,
+        hid: live.health_id,
+        age: live.age,
+        gender: live.gender,
+        blood: live.blood_group,
+        height: live.height,
+        weight: live.weight,
+        bmi: live.bmi,
+        score: live.health_score ?? 0,
+        risk: live.risk_level ?? 'Unknown',
+        conditions: [...parseList(live.existing_diseases), ...parseList(live.chronic_diseases)],
+        allergies: parseList(live.allergies),
+        meds: parseList(live.current_medications),
+        family: parseList(live.family_medical_history),
+        smoking: live.smoking_status,
+        alcohol: live.alcohol_consumption,
+        mobile: live.mobile,
+      }
+    : {
+        name: demoPerson?.name ?? ME.name,
+        hid: demoPerson?.healthId ?? ME.healthId,
+        age: demoPerson?.age ?? ME.age,
+        gender: demoPerson ? (demoPerson.gender === 'F' ? 'Female' : 'Male') : ME.gender,
+        blood: demoPerson?.blood ?? ME.bloodGroup,
+        height: ME.height,
+        weight: ME.weight,
+        bmi: ME.bmi,
+        score: demoPerson?.score ?? ME.score,
+        risk: demoPerson?.risk ?? 'Low',
+        conditions: ME.conditions,
+        allergies: ME.allergies,
+        meds: ['Amlodipine 5mg', 'Telmisartan 40mg', 'Rosuvastatin 10mg'],
+        family: ME.family,
+        smoking: ME.smoking,
+        alcohol: ME.alcohol,
+        mobile: ME.mobile,
+      };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-400">Loading patient record...</div>;
-  if (!patient) return <div className="p-8 text-center text-red-400">Patient not found</div>;
+  const appts = live ? (apptQ.data ?? []).map(mapAppt) : APPOINTMENTS;
+  const rxs = live ? (rxQ.data ?? []).map(mapRx) : PRESCRIPTIONS;
+  const reports = live ? (repQ.data ?? []).map(mapReport) : LAB_REPORTS.filter((r) => r.patient === 'Priya Sharma');
+  const base = location.split('/')[1];
 
-  const healthScore = score?.score ?? patient.health_score ?? 0;
-  const scoreColor = (s: number) => {
-    if (s >= 80) return "text-emerald-400";
-    if (s >= 60) return "text-yellow-400";
-    if (s >= 40) return "text-orange-400";
-    return "text-red-400";
-  };
-  const ringColor = (s: number) => {
-    if (s >= 80) return "border-emerald-500/30";
-    if (s >= 60) return "border-yellow-500/30";
-    if (s >= 40) return "border-orange-500/30";
-    return "border-red-500/30";
-  };
-
-  const qrData = JSON.stringify({ healthId: patient.health_id, name: patient.full_name, blood: patient.blood_group });
-
-  let backUrl = "/";
-  if (location.startsWith("/admin")) backUrl = "/admin/patients";
-  else if (location.startsWith("/doctor")) backUrl = "/doctor/patients";
-  else if (location.startsWith("/hospital")) backUrl = "/hospital/patients";
-
-  const showBackButton = profile?.role !== 'patient';
+  if (loading)
+    return (
+      <Page>
+        <Skeleton className="h-44 rounded-3xl" />
+        <Skeleton className="mt-6 h-96 rounded-2xl" />
+      </Page>
+    );
+  if (error)
+    return (
+      <Page>
+        <Card>
+          <EmptyState icon={<AlertTriangle />} title="Couldn't open this record" description={(error as Error).message} action={<Btn size="sm" variant="secondary" onClick={() => history.back()}>Go back</Btn>} />
+        </Card>
+      </Page>
+    );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        {showBackButton && (
-          <Link href={backUrl}>
-            <Button variant="outline" size="icon" className="border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-        )}
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight text-white">{patient.full_name}</h1>
-            <RiskBadge level={patient.risk_level} />
+    <Page>
+      {!self && (
+        <Link href={`/${base}/${base === 'doctor' ? 'patients' : base === 'hospital' ? 'admissions' : 'patients'}`} className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-brand-700">
+          ← Back
+        </Link>
+      )}
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-6 p-6 sm:p-8 lg:flex-row lg:items-center">
+          <Avatar name={p.name} size={84} ring />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-display text-2xl font-bold text-ink">{p.name}</h1>
+              <Badge tone={/low|healthy/i.test(p.risk) ? 'green' : /moderate|medium/i.test(p.risk) ? 'amber' : 'red'} dot>
+                {/risk/i.test(p.risk) || /healthy/i.test(p.risk) ? p.risk : `${p.risk} Risk`}
+              </Badge>
+            </div>
+            <p className="mt-1 font-mono text-sm font-semibold text-brand-700">{p.hid}</p>
+            <div className="mt-5 grid grid-cols-3 gap-x-6 gap-y-4 sm:grid-cols-6">
+              <InfoRow label="Age" value={p.age ? `${p.age} yrs` : '—'} />
+              <InfoRow label="Gender" value={p.gender} />
+              <InfoRow label="Blood" value={p.blood} />
+              <InfoRow label="Height" value={p.height ? `${p.height} cm` : '—'} />
+              <InfoRow label="Weight" value={p.weight ? `${p.weight} kg` : '—'} />
+              <InfoRow label="BMI" value={p.bmi ?? '—'} />
+            </div>
           </div>
-          <p className="text-slate-400 font-mono text-sm mt-1">{patient.health_id}</p>
+          <div className="flex items-center gap-5">
+            <ScoreRing score={p.score} size={116} thickness={10} />
+            <div className="hidden rounded-2xl border border-line-soft p-2 sm:block">
+              <QRCodeSVG value={`prevntiv://patient/${p.hid}`} size={84} fgColor="#014d33" />
+            </div>
+          </div>
         </div>
-        <div className="sm:ml-auto">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800">
-                <QrCode className="h-4 w-4" /> Health ID QR Code
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-sm bg-slate-900 border-slate-800 text-white">
-              <DialogHeader>
-                <DialogTitle className="text-white">Patient QR Code</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col items-center gap-4 py-4">
-                <div className="p-4 bg-white rounded-xl border border-slate-700 shadow-sm">
-                  <QRCodeSVG value={qrData} size={200} level="H" includeMargin />
-                </div>
-                <div className="text-center">
-                  <p className="font-mono font-bold text-lg tracking-widest text-slate-900">{patient.health_id}</p>
-                  <p className="text-sm text-slate-400 mt-1">{patient.full_name}</p>
-                  <p className="text-xs text-slate-500">Blood Group: {patient.blood_group}</p>
-                </div>
-                <p className="text-xs text-center text-slate-400">
-                  Scan at any HealthOS-connected hospital, lab, or clinic for instant patient identification.
+        {!self && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line-soft bg-slate-50/60 px-6 py-3 text-xs text-ink-3 sm:px-8">
+            <ShieldCheck className="size-4 text-brand-600" /> Access granted by patient · This view is recorded in the EHR audit trail.
+            {role === 'doctor' && (
+              <Btn size="xs" className="ml-auto" href="/doctor/prescriptions/new">
+                Create Prescription
+              </Btn>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <CapsuleTabs className="my-6" tabs={['Overview', 'Appointments', 'Prescriptions', 'Lab Reports', 'Discharge Summaries'] as Tab[]} value={tab} onChange={setTab} />
+
+      {tab === 'Overview' && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {[
+                { l: 'Blood Pressure', v: '120/80', u: 'mmHg', i: Activity, c: 'text-violet-500' },
+                { l: 'Heart Rate', v: '72', u: 'bpm', i: HeartPulse, c: 'text-rose-500' },
+                { l: 'SpO₂', v: '98', u: '%', i: Droplets, c: 'text-sky-500' },
+                { l: 'Temperature', v: '98.6', u: '°F', i: Thermometer, c: 'text-amber-500' },
+              ].map((v) => (
+                <Card key={v.l} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-ink-3">{v.l}</span>
+                    <v.i className={`size-4 ${v.c}`} />
+                  </div>
+                  <p className="mt-3 num font-display text-2xl font-bold text-ink">
+                    {v.v} <span className="text-xs font-medium text-ink-3">{v.u}</span>
+                  </p>
+                </Card>
+              ))}
+            </div>
+            <Card>
+              <CardHeader title="Health Score Trend" subtitle="Last 6 months" />
+              <div className="px-3 pb-5 pt-4 sm:px-5">
+                <TrendChart data={SERIES.score} xKey="t" series={[{ key: 'v', name: 'Score' }]} height={220} domain={[50, 100]} />
+              </div>
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <ListCard title="Active Conditions" icon={<Stethoscope className="size-[18px]" />} items={p.conditions} tone="mint" />
+            <ListCard title="Allergies" icon={<AlertTriangle className="size-[18px]" />} items={p.allergies} tone="amber" />
+            <ListCard title="Current Medications" icon={<Pill className="size-[18px]" />} items={p.meds} tone="green" />
+            <Card className="p-5">
+              <h3 className="mb-3 flex items-center gap-2 font-display text-[15px] font-bold text-ink">
+                <ClipboardList className="size-[18px] text-brand-600" /> Lifestyle & Family
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <InfoRow label="Smoking" value={p.smoking || '—'} />
+                <InfoRow label="Alcohol" value={p.alcohol || '—'} />
+                <InfoRow label="Family history" value={p.family.join(', ') || '—'} className="col-span-2" />
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {tab === 'Appointments' && (
+        <Card className="overflow-hidden">
+          <DataTable
+            rows={appts}
+            rowKey={(a) => a.id}
+            empty={<EmptyState icon={<CalendarDays />} title="No appointments" />}
+            columns={[
+              { key: 'd', header: 'Date', cell: (a) => <><p className="font-semibold text-ink">{fmtDate(a.date)}</p><p className="text-xs text-ink-3">{a.time}</p></> },
+              { key: 'doc', header: 'Doctor', cell: (a) => <><p className="font-medium text-ink">{a.doctor}</p><p className="text-xs text-ink-3">{a.specialty}</p></> },
+              { key: 't', header: 'Type', cell: (a) => a.type },
+              { key: 'r', header: 'Reason', cell: (a) => a.reason || '—' },
+              { key: 's', header: 'Status', cell: (a) => <StatusPill status={a.status} /> },
+            ]}
+          />
+        </Card>
+      )}
+
+      {tab === 'Prescriptions' && (
+        <Card className="overflow-hidden">
+          <DataTable
+            rows={rxs}
+            rowKey={(r) => r.id}
+            onRowClick={setRx}
+            empty={<EmptyState icon={<Pill />} title="No prescriptions" />}
+            columns={[
+              { key: 'd', header: 'Issued', cell: (r) => fmtDate(r.date) },
+              { key: 'dx', header: 'Diagnosis', cell: (r) => <span className="font-semibold text-ink">{r.diagnosis}</span> },
+              { key: 'm', header: 'Medicines', cell: (r) => <span className="line-clamp-1">{r.medicines.map((m) => m.name).join(', ')}</span> },
+              { key: 'doc', header: 'Doctor', hideOnMobile: true, cell: (r) => r.doctor },
+              { key: 'f', header: 'Follow-up', hideOnMobile: true, cell: (r) => (r.followUp ? fmtDate(r.followUp) : '—') },
+            ]}
+          />
+        </Card>
+      )}
+
+      {tab === 'Lab Reports' && (
+        <Card className="overflow-hidden">
+          <DataTable
+            rows={reports}
+            rowKey={(r) => r.id}
+            onRowClick={setRep}
+            empty={<EmptyState icon={<FlaskConical />} title="No lab reports" />}
+            columns={[
+              { key: 'd', header: 'Date', cell: (r) => fmtDate(r.date) },
+              { key: 'n', header: 'Report', cell: (r) => <span className="font-semibold text-ink">{r.name}</span> },
+              { key: 'l', header: 'Laboratory', hideOnMobile: true, cell: (r) => r.lab },
+              { key: 'c', header: 'Category', cell: (r) => r.category },
+              { key: 's', header: 'Status', cell: (r) => <StatusPill status={r.status} /> },
+            ]}
+          />
+        </Card>
+      )}
+
+      {tab === 'Discharge Summaries' && (
+        <Card className="divide-y divide-line-soft overflow-hidden">
+          {[
+            { t: 'Discharge_Clinical_Summary.pdf', by: 'Dr. Amit Kumar', d: '2026-06-26', w: 'Cardiology Wing, Bed 12B' },
+            { t: 'Discharge_Summary_CityHosp.pdf', by: 'City Hospital Team', d: '2026-05-28', w: 'General Ward' },
+          ].map((s, i) => (
+            <div key={s.t} className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center">
+              <span className="inline-flex size-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                <FileText className="size-5" />
+              </span>
+              <div className="flex-1">
+                <p className="font-semibold text-ink">{s.t}</p>
+                <p className="text-xs text-ink-3">
+                  Finalized by {s.by} · {fmtDate(s.d)} · {s.w}
                 </p>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Top cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2 bg-slate-900 border-slate-800">
-          <CardHeader><CardTitle className="text-white">Personal Information</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-slate-300">
-              <div>
-                <div className="text-slate-400 mb-1">Age / Gender</div>
-                <div className="font-medium text-white">{patient.age} yrs / {patient.gender}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Blood Group</div>
-                <div className="font-medium text-white">{patient.blood_group || "—"}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Height / Weight</div>
-                <div className="font-medium text-white">{patient.height}cm / {patient.weight}kg</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">BMI</div>
-                <div className="font-medium text-white">{patient.bmi?.toFixed(1) || "—"}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Mobile</div>
-                <div className="font-medium text-white">{patient.mobile}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Email</div>
-                <div className="font-medium text-white truncate">{patient.email || "—"}</div>
-              </div>
-              <div className="sm:col-span-2">
-                <div className="text-slate-400 mb-1">Date of Birth</div>
-                <div className="font-medium text-white">
-                  {patient.date_of_birth ? new Date(patient.date_of_birth).toLocaleDateString() : "—"}
-                </div>
-              </div>
+              <Badge tone="green" upper>
+                Finalized
+              </Badge>
+              <Btn size="sm" variant="secondary" href={i === 0 ? `/${base}/summary/ad1` : undefined} disabled={i !== 0}>
+                View Summary
+              </Btn>
             </div>
-          </CardContent>
+          ))}
         </Card>
+      )}
 
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader><CardTitle className="text-white">Health Score</CardTitle></CardHeader>
-          <CardContent className="flex flex-col items-center justify-center py-4 gap-3">
-            <div className={`relative flex items-center justify-center w-32 h-32 rounded-full border-8 ${ringColor(healthScore)}`}>
-              <div className={`text-4xl font-bold ${scoreColor(healthScore)}`}>{healthScore || "—"}</div>
-            </div>
-            <div className="text-center space-y-1">
-              <RiskBadge level={patient.risk_level} />
-              <p className="text-xs text-slate-400 mt-1">Computed from BMI, conditions & lifestyle</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <RxDrawer rx={rx} onClose={() => setRx(null)} patientName={p.name} />
+      <ReportDrawer report={rep} onClose={() => setRep(null)} />
+    </Page>
+  );
+}
 
-      {/* Tabs */}
-      <Tabs defaultValue="clinical" className="w-full">
-        <TabsList className="bg-slate-900 border-slate-800">
-          <TabsTrigger value="clinical" className="gap-2 text-slate-400 data-[state=active]:text-white"><Activity className="w-4 h-4" />Clinical Profile</TabsTrigger>
-          <TabsTrigger value="appointments" className="gap-2 text-slate-400 data-[state=active]:text-white"><Calendar className="w-4 h-4" />Appointments</TabsTrigger>
-          <TabsTrigger value="prescriptions" className="gap-2 text-slate-400 data-[state=active]:text-white"><Pill className="w-4 h-4" />Prescriptions</TabsTrigger>
-          <TabsTrigger value="reports" className="gap-2 text-slate-400 data-[state=active]:text-white"><FileText className="w-4 h-4" />Lab Reports</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="clinical" className="mt-6 space-y-4">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader><CardTitle className="text-white">Medical History</CardTitle></CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              {[
-                ["Existing Conditions", patient.existing_diseases],
-                ["Chronic Diseases", patient.chronic_diseases],
-                ["Allergies", patient.allergies],
-                ["Current Medications", patient.current_medications],
-                ["Family Medical History", patient.family_medical_history],
-                ["Previous Surgeries", patient.surgeries],
-                ["Vaccinations", patient.vaccinations],
-              ].map(([label, value]) => (
-                <div key={label as string} className="pb-3 border-b border-slate-800 last:border-b-0 last:pb-0">
-                  <h4 className="font-semibold text-slate-300 mb-1">{label}</h4>
-                  <p className="text-slate-400">{value || "None reported"}</p>
-                </div>
-              ))}
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800">
-                <div>
-                  <h4 className="font-semibold text-slate-300 mb-1">Smoking</h4>
-                  <Badge variant={patient.smoking_status === "yes" ? "destructive" : "secondary"} className="rounded-full">
-                    {patient.smoking_status === "yes" ? "Smoker" : "Non-smoker"}
-                  </Badge>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-300 mb-1">Alcohol</h4>
-                  <Badge variant={patient.alcohol_consumption === "yes" ? "destructive" : "secondary"} className="rounded-full">
-                    {patient.alcohol_consumption === "yes" ? "Consumes Alcohol" : "Non-drinker"}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="appointments" className="mt-6">
-          <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-            <CardContent className="p-0">
-              <Table className="text-slate-300">
-                <TableHeader className="bg-slate-800/40">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Date & Time</TableHead>
-                    <TableHead className="text-slate-400">Doctor</TableHead>
-                    <TableHead className="text-slate-400">Type</TableHead>
-                    <TableHead className="text-slate-400">Status</TableHead>
-                    <TableHead className="text-slate-400">Reason</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {appointments?.map((apt) => (
-                    <TableRow key={apt.id} className="border-slate-800 hover:bg-slate-800/20">
-                      <TableCell className="font-medium text-white">
-                        <span>{new Date(apt.scheduled_date || apt.scheduledDate).toLocaleDateString()}</span>
-                        <span className="text-xs text-slate-400 ml-2">{apt.scheduled_time || apt.scheduledTime}</span>
-                      </TableCell>
-                      <TableCell>{apt.doctorName || `Doctor #${apt.doctor_id}`}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-xs capitalize text-slate-400">
-                          <TypeIcon type={apt.consultation_type || apt.consultationType} />
-                          {apt.consultation_type || apt.consultationType || "In-person"}
-                        </div>
-                      </TableCell>
-                      <TableCell><StatusBadge status={apt.status} /></TableCell>
-                      <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">{apt.reason || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                  {(!appointments || appointments.length === 0) && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={5} className="h-24 text-center text-slate-400">No appointments found.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="prescriptions" className="mt-6">
-          <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-            <CardContent className="p-0">
-              <Table className="text-slate-300">
-                <TableHeader className="bg-slate-800/40">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Date</TableHead>
-                    <TableHead className="text-slate-400">Doctor</TableHead>
-                    <TableHead className="text-slate-400">Diagnosis</TableHead>
-                    <TableHead className="text-slate-400">Medicines</TableHead>
-                    <TableHead className="text-slate-400">Follow-up</TableHead>
-                    <TableHead className="text-slate-400 text-right">PDF</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {prescriptions?.map((rx) => {
-                    let medsCount = 0;
-                    try { medsCount = JSON.parse(rx.medicines).length; } catch { medsCount = 1; }
-                    return (
-                      <TableRow key={rx.id} className="border-slate-800 hover:bg-slate-800/20">
-                        <TableCell className="text-xs">{new Date(rx.created_at || rx.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-xs text-slate-400">{rx.doctorName || `Doctor #${rx.doctor_id}`}</TableCell>
-                        <TableCell className="font-semibold text-white">{rx.diagnosis}</TableCell>
-                        <TableCell className="text-xs text-slate-400">{medsCount} {medsCount === 1 ? "medicine" : "medicines"}</TableCell>
-                        <TableCell className="text-xs text-slate-400">
-                          {rx.follow_up_date || rx.followUpDate ? new Date(rx.follow_up_date || rx.followUpDate).toLocaleDateString() : "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white hover:bg-slate-850">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-800 text-white">
-                              <DialogHeader>
-                                <DialogTitle className="text-white">Prescription — {rx.diagnosis}</DialogTitle>
-                              </DialogHeader>
-                              <PrintablePrescriptionWrapper rx={rx} />
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {(!prescriptions || prescriptions.length === 0) && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="h-24 text-center text-slate-400">No prescriptions found.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-6">
-          <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-            <CardContent className="p-0">
-              <Table className="text-slate-300">
-                <TableHeader className="bg-slate-800/40">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Date</TableHead>
-                    <TableHead className="text-slate-400">Report Name</TableHead>
-                    <TableHead className="text-slate-400">Laboratory</TableHead>
-                    <TableHead className="text-slate-400">Findings</TableHead>
-                    <TableHead className="text-slate-400">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reports?.map((report) => (
-                    <TableRow key={report.id} className={`border-slate-800 hover:bg-slate-800/20 ${report.is_critical || report.isCritical ? "bg-red-500/5 hover:bg-red-500/10" : ""}`}>
-                      <TableCell className="text-xs">{new Date(report.created_at || report.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 font-semibold text-white">
-                          <FileText className="h-4 w-4 text-slate-400" />
-                          {report.report_name || report.reportName}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-400">{report.labName || `Lab #${report.lab_id}`}</TableCell>
-                      <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">{report.findings || "—"}</TableCell>
-                      <TableCell>
-                        {report.is_critical || report.isCritical ? (
-                          <Badge className="bg-red-950/40 text-red-400 border border-red-500/20 gap-1 rounded-full">
-                            <AlertTriangle className="h-3 w-3" /> Critical
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 rounded-full">Normal</Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {(!reports || reports.length === 0) && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={5} className="h-24 text-center text-slate-400">No lab reports found.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+function ListCard({ title, icon, items, tone }: { title: string; icon: React.ReactNode; items: string[]; tone: 'mint' | 'amber' | 'green' }) {
+  return (
+    <Card className="p-5">
+      <h3 className="mb-3 flex items-center gap-2 font-display text-[15px] font-bold text-ink">
+        <span className="text-brand-600">{icon}</span> {title}
+      </h3>
+      <div className="flex flex-wrap gap-2">{items.length ? items.map((i) => <Badge key={i} tone={tone}>{i}</Badge>) : <span className="text-sm text-ink-3">None recorded</span>}</div>
+    </Card>
   );
 }

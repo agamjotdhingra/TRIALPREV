@@ -1,149 +1,128 @@
-import { useListAppointments } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Clock, CheckCircle2 } from "lucide-react";
-import { RiskBadge } from "@/components/SharedHelpers";
-import { Link } from "wouter";
+import { useMemo, useState } from 'react';
+import { useLocation } from 'wouter';
+import { toast } from 'sonner';
+import { AlertTriangle, Check, MessageSquare, User, Video } from 'lucide-react';
+import { useListAppointments, useUpdateAppointmentStatus } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Avatar, Badge, Btn, CapsuleTabs, Card, DataTable, EmptyState, Kpi, Page, PageHeader, StatusPill, toneFor } from '@/components/kit';
+import { QUEUE, type QueuePatient } from '@/data/demo';
+import { mapAppt } from '@/data/mappers';
+import { fmtDate } from '@/data/source';
+
+const RISK_ORDER: Record<string, number> = { critical: 0, high: 1, moderate: 2, medium: 2, healthy: 3, low: 3 };
 
 export default function DoctorQueue() {
-  const { data: appointments, isLoading } = useListAppointments();
+  const { isDemo } = useAuth();
+  const [, setLocation] = useLocation();
+  const q = useListAppointments();
+  const update = useUpdateAppointmentStatus();
+  const [tab, setTab] = useState<'All' | 'Scheduled' | 'Completed' | 'Cancelled'>('All');
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
 
-  if (isLoading) {
-    return <div className="p-8 text-center text-slate-400">Loading priority queue...</div>;
+  const base: (QueuePatient & { patientId?: number })[] = useMemo(() => {
+    if (isDemo || !q.data) return QUEUE;
+    return q.data.map(mapAppt).map((a) => ({
+      id: a.id,
+      name: a.patient ?? 'Patient',
+      pid: a.patientHid ?? '—',
+      age: 0,
+      gender: 'F' as const,
+      score: a.score ?? null,
+      risk: a.risk ?? 'N/A',
+      date: fmtDate(a.date),
+      time: a.time,
+      type: a.type,
+      status: a.status,
+      reason: a.reason,
+      blood: '',
+      patientId: a.patientId,
+    }));
+  }, [q.data, isDemo]);
+
+  const rows = useMemo(
+    () =>
+      base
+        .map((r) => ({ ...r, status: overrides[r.id] ?? r.status }))
+        .filter((r) => tab === 'All' || (tab === 'Scheduled' ? ['Scheduled', 'Active'].includes(r.status) : r.status === tab))
+        .sort((a, b) => (a.status === 'Cancelled' ? 1 : 0) - (b.status === 'Cancelled' ? 1 : 0) || (a.status === 'Completed' ? 1 : 0) - (b.status === 'Completed' ? 1 : 0) || (RISK_ORDER[a.risk.toLowerCase()] ?? 9) - (RISK_ORDER[b.risk.toLowerCase()] ?? 9)),
+    [base, overrides, tab],
+  );
+
+  async function complete(r: QueuePatient) {
+    setBusy(r.id);
+    try {
+      if (!isDemo) await update.mutateAsync({ id: r.id, status: 'completed' });
+      setOverrides((o) => ({ ...o, [r.id]: 'Completed' }));
+      toast.success(`Consultation with ${r.name} marked complete`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(null);
+    }
   }
 
-  // Filter for today's active appointments
-  const todayStr = new Date().toISOString().split("T")[0];
-  const todayAppts = appointments?.filter(
-    (a) => (a.scheduled_date || a.scheduledDate) === todayStr && a.status !== "cancelled"
-  ) || [];
-
-  // Sort by priority logic
-  const prioritySorted = [...todayAppts].sort((a, b) => {
-    // 1. Put active appointments before completed
-    const statusA = a.status === "completed" ? 1 : 0;
-    const statusB = b.status === "completed" ? 1 : 0;
-    if (statusA !== statusB) return statusA - statusB;
-
-    // 2. Sort by risk level
-    const riskWeight: Record<string, number> = { critical: 4, high: 3, moderate: 2, healthy: 1 };
-    const rA = riskWeight[(a.patientRiskLevel || "healthy").toLowerCase()] || 1;
-    const rB = riskWeight[(b.patientRiskLevel || "healthy").toLowerCase()] || 1;
-    if (rA !== rB) return rB - rA; // higher weight first
-
-    // 3. Sort by health score (lower score = higher priority)
-    const scoreA = a.patientHealthScore ?? 100;
-    const scoreB = b.patientHealthScore ?? 100;
-    return scoreA - scoreB;
-  });
+  const critical = base.filter((r) => /critical/i.test(r.risk) && r.status !== 'Completed').length;
+  const ehrId = (r: QueuePatient & { patientId?: number }) => (r.patientId ? String(r.patientId) : r.id);
+  const typeIcon = (t: string) => (/video/i.test(t) ? <Video className="size-4" /> : /tele|chat/i.test(t) ? <MessageSquare className="size-4" /> : <User className="size-4" />);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Smart Priority Queue</h1>
-        <p className="text-slate-400 mt-2">
-          Today's scheduled patients, sorted automatically by clinical risk level and health scores.
-        </p>
+    <Page>
+      <PageHeader title="Priority Queue" subtitle="Manage your daily consultations and patient timeline, prioritized by medical urgency." />
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Kpi label="In queue" value={base.filter((r) => ['Scheduled', 'Active'].includes(overrides[r.id] ?? r.status)).length} />
+        <Kpi label="Critical" value={critical} tone={critical ? 'danger' : 'default'} icon={<AlertTriangle />} />
+        <Kpi label="Completed" value={base.filter((r) => (overrides[r.id] ?? r.status) === 'Completed').length} icon={<Check />} />
+        <Kpi label="Avg wait" value="12" unit="min" />
       </div>
-
-      <Card className="bg-slate-900 border-slate-800 text-white">
-        <CardHeader>
-          <CardTitle className="text-white">Live Patient Roster</CardTitle>
-          <CardDescription className="text-slate-400">Review symptoms and start consultations.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-slate-800 overflow-hidden">
-            <Table className="text-slate-350">
-              <TableHeader className="bg-slate-850 border-slate-800">
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-slate-400 w-24">Priority</TableHead>
-                  <TableHead className="text-slate-400">Patient</TableHead>
-                  <TableHead className="text-slate-400">Health Score</TableHead>
-                  <TableHead className="text-slate-400">Risk Level</TableHead>
-                  <TableHead className="text-slate-400">Time</TableHead>
-                  <TableHead className="text-slate-400">Reason</TableHead>
-                  <TableHead className="text-slate-400 text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {prioritySorted.map((item, i) => {
-                  const isCritical = (item.patientRiskLevel || "").toLowerCase() === "critical";
-                  const isCompleted = item.status === "completed";
-
-                  return (
-                    <TableRow
-                      key={item.id}
-                      className={`border-slate-800 hover:bg-slate-850/40 ${
-                        isCritical && !isCompleted ? "bg-red-500/5 hover:bg-red-500/10" : ""
-                      }`}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm text-slate-400 font-semibold">#{i + 1}</span>
-                          {isCritical && !isCompleted && <AlertCircle className="h-4 w-4 text-red-400 animate-pulse" />}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-semibold text-white">{item.patientName}</div>
-                        <div className="text-xs text-slate-450 font-mono mt-0.5">{item.patientHealthId}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div
-                          className={`text-sm font-bold ${
-                            (item.patientHealthScore ?? 0) >= 80
-                              ? "text-emerald-400"
-                              : (item.patientHealthScore ?? 0) >= 60
-                                ? "text-yellow-405"
-                                : (item.patientHealthScore ?? 0) >= 40
-                                  ? "text-orange-400"
-                                  : "text-red-400"
-                          }`}
-                        >
-                          {item.patientHealthScore ?? "-"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <RiskBadge level={item.patientRiskLevel} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                          <Clock className="h-3.5 w-3.5" />
-                          {item.scheduled_time || item.scheduledTime || "Walk-in"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-slate-400">
-                        {item.reason || "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isCompleted ? (
-                          <div className="flex items-center justify-end gap-1.5 text-xs text-emerald-400 font-semibold pr-2">
-                            <CheckCircle2 className="h-4 w-4" /> Completed
-                          </div>
-                        ) : (
-                          <Link href={`/doctor/patients/${item.patient_id}`}>
-                            <Button id={`start-consult-${item.id}`} size="sm" className="bg-emerald-650 hover:bg-emerald-600 text-white border-none font-semibold">
-                              Start Consult
-                            </Button>
-                          </Link>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {prioritySorted.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={7} className="h-32 text-center text-slate-400">
-                      Queue is currently empty for today.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
+      <CapsuleTabs className="mb-5" tabs={['All', 'Scheduled', 'Completed', 'Cancelled']} value={tab} onChange={setTab} />
+      <Card className="overflow-hidden">
+        {q.isError && !isDemo && <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-[13px] text-red-700">{(q.error as Error).message}</p>}
+        <DataTable
+          loading={!isDemo && q.isLoading}
+          rows={rows}
+          rowKey={(r) => r.id}
+          rowClassName={(r) => (/critical/i.test(r.risk) && r.status !== 'Completed' ? 'bg-red-50/50' : undefined)}
+          empty={<EmptyState title="Queue is clear" description="No consultations in this view." />}
+          columns={[
+            { key: 'p', header: 'Patient', cell: (r) => <div className="flex items-center gap-3"><Avatar name={r.name} size={36} /><div><p className="font-semibold text-ink">{r.name}</p><p className="font-mono text-[11px] text-ink-3">{r.pid}</p></div></div> },
+            { key: 'sc', header: 'Health Score', align: 'center', cell: (r) => <span className="num font-display text-lg font-bold" style={{ color: r.score == null ? '#94a3b8' : r.score >= 80 ? '#029c6b' : r.score >= 60 ? '#d97706' : '#dc2626' }}>{r.score ?? '--'}</span> },
+            { key: 'risk', header: 'Risk Level', cell: (r) => <Badge tone={toneFor(r.risk === 'Healthy' ? 'healthy' : r.risk)} upper>{r.risk}</Badge> },
+            { key: 'dt', header: 'Date & Time', hideOnMobile: true, cell: (r) => <><p className="whitespace-nowrap text-ink-2">{r.date}</p><p className="text-xs font-semibold text-ink">{r.time}</p></> },
+            { key: 't', header: 'Type', hideOnMobile: true, cell: (r) => <span className="inline-flex items-center gap-1.5 text-ink-2">{typeIcon(r.type)} {r.type}</span> },
+            { key: 's', header: 'Status', cell: (r) => <StatusPill status={r.status} /> },
+            { key: 'r', header: 'Reason', hideOnMobile: true, cell: (r) => <span className="line-clamp-2 max-w-[200px] text-[13px]">{r.reason}</span> },
+            {
+              key: 'a',
+              header: 'Action',
+              align: 'right',
+              cell: (r) =>
+                r.status === 'Active' ? (
+                  <Btn size="xs" onClick={() => setLocation('/doctor/chat')} icon={<Video className="size-3.5" />}>
+                    Start Consult
+                  </Btn>
+                ) : r.status === 'Scheduled' ? (
+                  <div className="flex justify-end gap-1.5">
+                    <Btn size="xs" variant="secondary" loading={busy === r.id} onClick={() => complete(r)}>
+                      Complete
+                    </Btn>
+                    <Btn size="xs" variant="outline" href={`/doctor/patients/${ehrId(r)}`}>
+                      View EHR
+                    </Btn>
+                  </div>
+                ) : r.status === 'Completed' ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700">
+                    <Check className="size-3.5" /> Completed
+                  </span>
+                ) : (
+                  <Btn size="xs" variant="ghost" href={`/doctor/patients/${ehrId(r)}`}>
+                    Details
+                  </Btn>
+                ),
+            },
+          ]}
+        />
       </Card>
-    </div>
+    </Page>
   );
 }

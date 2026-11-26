@@ -1,134 +1,127 @@
-import { useListAppointments, useUpdateAppointmentStatus } from "@/api/hooks";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, CheckCircle2, RefreshCw } from "lucide-react";
-import { StatusBadge, TypeIcon } from "@/components/SharedHelpers";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { useMemo, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, MessageSquare, User, Video } from 'lucide-react';
+import { useListAppointments } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
+import { Avatar, Btn, Card, EmptyState, Kpi, Page, PageHeader, StatusPill } from '@/components/kit';
+import { QUEUE } from '@/data/demo';
+import { mapAppt } from '@/data/mappers';
+import { cn } from '@/lib/utils';
+
+interface Slot { id: string; date: string; time: string; name: string; reason: string; type: string; status: string; patientId?: string }
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+function demoSlots(): Slot[] {
+  const out: Slot[] = [];
+  const start = new Date();
+  start.setDate(start.getDate() - start.getDay() + 1);
+  for (let d = 0; d < 6; d++) {
+    const day = new Date(start);
+    day.setDate(start.getDate() + d);
+    QUEUE.slice(0, 3 + (d % 3)).forEach((q, i) => out.push({ id: `${d}-${q.id}`, date: iso(day), time: ['09:00 AM', '09:30 AM', '10:15 AM', '11:00 AM', '02:00 PM'][i], name: q.name, reason: q.reason, type: q.type, status: day < new Date(new Date().toDateString()) ? 'Completed' : q.status === 'Cancelled' ? 'Cancelled' : 'Scheduled', patientId: q.id }));
+  }
+  return out;
+}
 
 export default function DoctorAppointments() {
-  const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState("all");
-  const { data: appointments, isLoading, refetch } = useListAppointments();
-  const updateMutation = useUpdateAppointmentStatus();
-
-  async function handleComplete(id: number) {
-    try {
-      await updateMutation.mutateAsync({ id, status: "completed" });
-      toast({ title: "Success", description: "Appointment marked as completed." });
-      refetch();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
-  }
-
-  const filtered = appointments?.filter(
-    (a) => statusFilter === "all" || a.status.toLowerCase() === statusFilter.toLowerCase()
+  const { isDemo } = useAuth();
+  const q = useListAppointments();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [day, setDay] = useState(iso(new Date()));
+  const slots: Slot[] = useMemo(
+    () => (isDemo || !q.data ? demoSlots() : q.data.map(mapAppt).map((a) => ({ id: a.id, date: a.date, time: a.time, name: a.patient ?? 'Patient', reason: a.reason, type: a.type, status: a.status, patientId: a.patientId ? String(a.patientId) : undefined }))),
+    [q.data, isDemo],
   );
+  const week = useMemo(() => {
+    const s = new Date();
+    s.setDate(s.getDate() - ((s.getDay() + 6) % 7) + weekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(s);
+      d.setDate(s.getDate() + i);
+      return d;
+    });
+  }, [weekOffset]);
+  const todays = slots.filter((s) => s.date === day).sort((a, b) => a.time.localeCompare(b.time));
+  const icon = (t: string) => (/video/i.test(t) ? Video : /chat|tele/i.test(t) ? MessageSquare : User);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Clinical Schedule</h1>
-          <p className="text-slate-400 mt-2">View and manage scheduled consultations.</p>
+    <Page>
+      <PageHeader title="Schedule" subtitle="Your consultations across the week." />
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Kpi label="This week" value={slots.filter((s) => week.some((w) => iso(w) === s.date)).length} icon={<CalendarDays />} />
+        <Kpi label="Today" value={slots.filter((s) => s.date === iso(new Date())).length} icon={<Clock />} />
+        <Kpi label="Video" value={slots.filter((s) => /video/i.test(s.type)).length} icon={<Video />} />
+        <Kpi label="In-person" value={slots.filter((s) => /person/i.test(s.type)).length} icon={<User />} />
+      </div>
+      <Card className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <p className="font-display text-[15px] font-bold text-ink">{week[0].toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</p>
+          <div className="flex gap-1">
+            <button onClick={() => setWeekOffset((w) => w - 1)} className="rounded-lg p-2 text-ink-3 hover:bg-slate-100" aria-label="Previous week">
+              <ChevronLeft className="size-4" />
+            </button>
+            <Btn size="xs" variant="outline" onClick={() => { setWeekOffset(0); setDay(iso(new Date())); }}>
+              Today
+            </Btn>
+            <button onClick={() => setWeekOffset((w) => w + 1)} className="rounded-lg p-2 text-ink-3 hover:bg-slate-100" aria-label="Next week">
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div className="flex gap-2">
-        {["all", "scheduled", "completed", "cancelled"].map((status) => (
-          <Button
-            key={status}
-            variant={statusFilter === status ? "default" : "outline"}
-            onClick={() => setStatusFilter(status)}
-            className={`capitalize ${
-              statusFilter === status
-                ? "bg-emerald-600 hover:bg-emerald-500 text-white border-none"
-                : "border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800"
-            }`}
-          >
-            {status}
-          </Button>
-        ))}
-      </div>
-
-      <Card className="bg-slate-900 border-slate-800 text-white overflow-hidden">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="text-center py-12 text-slate-400">Loading appointments schedule...</div>
-          ) : !filtered || filtered.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-              <Calendar className="h-10 w-10 text-slate-650" />
-              <p className="font-medium">No appointments match your filters.</p>
-            </div>
-          ) : (
-            <Table className="text-slate-350">
-              <TableHeader className="bg-slate-850 border-slate-800">
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-slate-400">Date & Time</TableHead>
-                  <TableHead className="text-slate-400">Patient</TableHead>
-                  <TableHead className="text-slate-400">Type</TableHead>
-                  <TableHead className="text-slate-400">Status</TableHead>
-                  <TableHead className="text-slate-400">Reason</TableHead>
-                  <TableHead className="text-slate-400 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((apt) => (
-                  <TableRow key={apt.id} className="border-slate-800 hover:bg-slate-850/40">
-                    <TableCell className="font-semibold text-white">
-                      <div className="flex flex-col">
-                        <span>{new Date(apt.scheduled_date || apt.scheduledDate).toLocaleDateString()}</span>
-                        <span className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                          <Clock className="h-3 w-3" /> {apt.scheduled_time || apt.scheduledTime}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/doctor/patients/${apt.patient_id}`} className="hover:underline font-semibold text-white">
-                        {apt.patientName || `Patient #${apt.patient_id}`}
-                      </Link>
-                      <div className="text-xs text-slate-400 font-mono mt-0.5">{apt.patientHealthId}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-xs capitalize text-slate-450">
-                        <TypeIcon type={apt.consultation_type || apt.consultationType} />
-                        {apt.consultation_type || apt.consultationType}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={apt.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">{apt.reason || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {apt.status === "scheduled" && (
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            id={`complete-${apt.id}`}
-                            size="sm"
-                            onClick={() => handleComplete(apt.id)}
-                            className="bg-emerald-650 hover:bg-emerald-600 text-white border-none font-semibold"
-                          >
-                            Complete
-                          </Button>
-                          <Link href={`/doctor/patients/${apt.patient_id}`}>
-                            <Button size="sm" variant="outline" className="border-slate-800 text-slate-300 hover:text-white">
-                              View EHR
-                            </Button>
-                          </Link>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+          {week.map((d) => {
+            const k = iso(d);
+            const n = slots.filter((s) => s.date === k).length;
+            return (
+              <button key={k} onClick={() => setDay(k)} className={cn('flex flex-col items-center rounded-2xl py-3 transition-all', day === k ? 'bg-brand-700 text-white shadow-lift' : 'hover:bg-slate-50')}>
+                <span className={cn('text-[11px] font-semibold uppercase', day === k ? 'text-white/75' : 'text-ink-3')}>{d.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+                <span className="num mt-1 font-display text-lg font-bold">{d.getDate()}</span>
+                <span className={cn('mt-1 size-1.5 rounded-full', n ? (day === k ? 'bg-white' : 'bg-brand-500') : 'bg-transparent')} />
+              </button>
+            );
+          })}
+        </div>
       </Card>
-    </div>
+      <div className="mt-6 space-y-3">
+        {todays.length === 0 && (
+          <Card>
+            <EmptyState icon={<CalendarDays />} title="No consultations" description="Nothing scheduled for this day." />
+          </Card>
+        )}
+        {todays.map((s) => {
+          const I = icon(s.type);
+          return (
+            <Card key={s.id} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+              <div className="w-24 shrink-0">
+                <p className="num font-display text-lg font-bold text-ink">{s.time}</p>
+                <p className="flex items-center gap-1 text-xs text-ink-3">
+                  <I className="size-3.5" /> {s.type}
+                </p>
+              </div>
+              <div className="flex min-w-0 flex-1 items-center gap-3 border-line-soft sm:border-l sm:pl-5">
+                <Avatar name={s.name} size={40} />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">{s.name}</p>
+                  <p className="truncate text-xs text-ink-3">{s.reason}</p>
+                </div>
+              </div>
+              <StatusPill status={s.status} />
+              <div className="flex gap-2">
+                {s.patientId && (
+                  <Btn size="xs" variant="outline" href={`/doctor/patients/${s.patientId}`}>
+                    View EHR
+                  </Btn>
+                )}
+                {s.status === 'Scheduled' && (
+                  <Btn size="xs" href="/doctor/chat" icon={<Video className="size-3.5" />}>
+                    Start
+                  </Btn>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </Page>
   );
 }

@@ -1,105 +1,50 @@
-import { useListPatients } from "@/api/hooks";
-import { Link } from "wouter";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, UserCircle } from "lucide-react";
-import { useState } from "react";
-import { RiskBadge } from "@/components/SharedHelpers";
+import { useDeferredValue, useMemo, useState } from 'react';
+import { useLocation } from 'wouter';
+import { Users } from 'lucide-react';
+import { useListPatients } from '@/api/hooks';
+import { Avatar, Badge, Btn, Card, DataTable, EmptyState, Page, PageHeader, Pagination, Progress, SearchInput, toneFor, usePaged } from '@/components/kit';
+import { MY_PATIENTS } from '@/data/demo';
+import { useSource } from '@/data/source';
 
 export default function DoctorPatients() {
-  const [search, setSearch] = useState("");
-  const { data: patients, isLoading } = useListPatients({ search: search || undefined });
+  const [, setLocation] = useLocation();
+  const [q, setQ] = useState('');
+  const dq = useDeferredValue(q);
+  const src = useSource(useListPatients(dq ? { search: dq } : {}), MY_PATIENTS, (p: any) => ({
+    id: String(p.id),
+    name: p.full_name,
+    gender: (p.gender ?? '').charAt(0).toUpperCase(),
+    age: p.age ?? '',
+    healthId: p.health_id,
+    blood: p.blood_group ?? '—',
+    score: p.health_score ?? 0,
+    risk: p.risk_level ?? 'Unknown',
+  }));
+  const rows = useMemo(() => (src.isDemo ? src.rows.filter((r) => (r.name + r.healthId).toLowerCase().includes(dq.toLowerCase())) : src.rows), [src.rows, src.isDemo, dq]);
+  const paged = usePaged(rows, 8);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">My Patients</h1>
-        <p className="text-slate-400 mt-2">Access EHR profiles for patients linked to your schedule.</p>
-      </div>
-
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader className="pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search patient registry..."
-                className="pl-9 bg-slate-950 border-slate-800 text-white placeholder-slate-500 focus-visible:ring-slate-700"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {isLoading ? (
-            <div className="text-center py-8 text-slate-400">Loading patients...</div>
-          ) : (
-            <div className="rounded-md border border-slate-800 overflow-hidden">
-              <Table className="text-slate-300">
-                <TableHeader className="bg-slate-850 border-slate-800">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Patient</TableHead>
-                    <TableHead className="text-slate-400">Health ID</TableHead>
-                    <TableHead className="text-slate-400">Blood Group</TableHead>
-                    <TableHead className="text-slate-400">Health Score</TableHead>
-                    <TableHead className="text-slate-400">Risk Level</TableHead>
-                    <TableHead className="text-slate-400 text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {patients?.map((patient) => (
-                    <TableRow key={patient.id} className="border-slate-800 hover:bg-slate-850/40">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <UserCircle className="h-8 w-8 text-slate-450" />
-                          <div>
-                            <div className="font-semibold text-white">{patient.full_name}</div>
-                            <div className="text-xs text-slate-400">{patient.gender}, {patient.age} yrs</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-slate-300">{patient.health_id}</TableCell>
-                      <TableCell>{patient.blood_group || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className={`text-sm font-semibold ${
-                            (patient.health_score ?? 0) >= 80 ? "text-emerald-400" :
-                            (patient.health_score ?? 0) >= 60 ? "text-yellow-450" :
-                            (patient.health_score ?? 0) >= 40 ? "text-orange-400" :
-                            "text-red-400"
-                          }`}>
-                            {patient.health_score ?? "-"}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <RiskBadge level={patient.risk_level} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Link href={`/doctor/patients/${patient.id}`}>
-                          <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white hover:bg-slate-800">
-                            View EHR
-                          </Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {patients?.length === 0 && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="h-24 text-center text-slate-400">
-                        No patients found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
+    <Page>
+      <PageHeader title="My Patients" subtitle="Manage and monitor patient health records." actions={<SearchInput className="w-full sm:w-80" value={q} onChange={setQ} placeholder="Live search patients..." />} />
+      <Card className="overflow-hidden">
+        {src.error && <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-[13px] text-red-700">{src.error}</p>}
+        <DataTable
+          loading={src.loading}
+          rows={paged.slice}
+          rowKey={(r) => r.id}
+          onRowClick={(r) => setLocation(`/doctor/patients/${r.id}`)}
+          empty={<EmptyState icon={<Users />} title={q ? 'No patients match' : 'No patients yet'} description={q ? 'Try a name or Health ID.' : 'Patients appear here after their first consultation with you.'} />}
+          columns={[
+            { key: 'p', header: 'Patient', cell: (r) => <div className="flex items-center gap-3"><Avatar name={r.name} size={36} /><div><p className="font-semibold text-ink">{r.name}</p><p className="text-xs text-ink-3">{[r.gender, r.age].filter(Boolean).join('/')}</p></div></div> },
+            { key: 'h', header: 'Health ID', cell: (r) => <span className="font-mono text-xs font-semibold text-ink-2">{r.healthId}</span> },
+            { key: 'b', header: 'Blood Group', hideOnMobile: true, cell: (r) => <Badge tone="gray">{r.blood}</Badge> },
+            { key: 's', header: 'Health Score', cell: (r) => <div className="flex w-32 items-center gap-2.5"><span className="num w-7 font-semibold text-ink">{r.score}</span><Progress value={r.score} tone={r.score >= 80 ? 'green' : r.score >= 50 ? 'amber' : 'red'} height={6} /></div> },
+            { key: 'r', header: 'Risk Level', cell: (r) => <Badge tone={toneFor(r.risk)} dot>{r.risk}</Badge> },
+            { key: 'a', header: 'Action', align: 'right', cell: (r) => <Btn size="xs" variant="secondary" href={`/doctor/patients/${r.id}`}>View EHR</Btn> },
+          ]}
+        />
+        {rows.length > 0 && <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} onPage={paged.setPage} noun="patients" />}
       </Card>
-    </div>
+    </Page>
   );
 }

@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect } from 'wouter';
+import { Toaster } from 'sonner';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/auth/AuthContext';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
@@ -7,6 +8,20 @@ import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import LoginPage from '@/auth/LoginPage';
 import RegisterPage from '@/auth/RegisterPage';
 import ApplyPage from '@/auth/ApplyPage';
+import PhoneVerify from '@/auth/PhoneVerify';
+import Welcome from '@/pages/public/Welcome';
+import RoleSelect from '@/pages/public/RoleSelect';
+import PatientOnboarding from '@/pages/onboarding/PatientOnboarding';
+import PatientHealth from '@/pages/patient/Health';
+import VitalDetail from '@/pages/patient/VitalDetail';
+import BookLab from '@/pages/patient/BookLab';
+import UploadDocument from '@/pages/patient/UploadDocument';
+import RecentlyDeleted from '@/pages/patient/RecentlyDeleted';
+import Billing from '@/pages/patient/Billing';
+import { WhoHasAccess, ManageAccess, AccessRequests, GiveAccess, AccessLog, ChooseRecordsPage } from '@/pages/patient/Access';
+import Chat from '@/pages/shared/Chat';
+import ClinicalSummary from '@/pages/shared/ClinicalSummary';
+import Discharge from '@/pages/hospital-admin/Discharge';
 
 // Patient pages
 import PatientLayout from '@/layouts/PatientLayout';
@@ -75,6 +90,11 @@ function AppRoutes() {
       <Route path="/auth/login" component={LoginPage} />
       <Route path="/auth/register" component={RegisterPage} />
       <Route path="/auth/apply" component={ApplyPage} />
+      <Route path="/auth/signup/:kind" component={ApplyPage} />
+      <Route path="/auth/phone" component={PhoneVerify} />
+      <Route path="/welcome" component={Welcome} />
+      <Route path="/role" component={RoleSelect} />
+      <Route path="/onboarding/:step?" component={PatientOnboarding} />
 
       {/* Root — redirect based on role */}
       <Route path="/">
@@ -82,12 +102,26 @@ function AppRoutes() {
       </Route>
 
       {/* ── PATIENT ──────────────────────────────── */}
-      <Route path="/patient/:rest*">
+      <Route path="/patient/*">
         <ProtectedRoute allowedRoles={['patient']}>
           <PatientLayout>
             <Switch>
               <Route path="/patient/dashboard" component={PatientDashboard} />
+              <Route path="/patient/health" component={PatientHealth} />
+              <Route path="/patient/vitals/:metric" component={VitalDetail} />
+              <Route path="/patient/appointments/book-lab" component={BookLab} />
               <Route path="/patient/appointments" component={PatientAppointments} />
+              <Route path="/patient/documents/upload" component={UploadDocument} />
+              <Route path="/patient/documents/deleted" component={RecentlyDeleted} />
+              <Route path="/patient/access/requests" component={AccessRequests} />
+              <Route path="/patient/access/grant" component={GiveAccess} />
+              <Route path="/patient/access/log" component={AccessLog} />
+              <Route path="/patient/access/:id/choose/:category" component={ChooseRecordsPage} />
+              <Route path="/patient/access/:id" component={ManageAccess} />
+              <Route path="/patient/access" component={WhoHasAccess} />
+              <Route path="/patient/chat">{() => <Chat role="patient" />}</Route>
+              <Route path="/patient/billing" component={Billing} />
+              <Route path="/patient/summary/:id" component={ClinicalSummary} />
               <Route path="/patient/records" component={PatientEHR} />
               <Route path="/patient/prescriptions" component={PatientPrescriptions} />
               <Route path="/patient/reports" component={PatientReports} />
@@ -100,13 +134,15 @@ function AppRoutes() {
       </Route>
 
       {/* ── DOCTOR ───────────────────────────────── */}
-      <Route path="/doctor/:rest*">
+      <Route path="/doctor/*">
         <ProtectedRoute allowedRoles={['doctor']}>
           <DoctorLayout>
             <Switch>
               <Route path="/doctor/dashboard" component={DoctorDashboard} />
               <Route path="/doctor/queue" component={DoctorQueue} />
               <Route path="/doctor/appointments" component={DoctorAppointments} />
+              <Route path="/doctor/summary/:id" component={ClinicalSummary} />
+              <Route path="/doctor/chat">{() => <Chat role="doctor" />}</Route>
               <Route path="/doctor/patients/:id" component={PatientEHR} />
               <Route path="/doctor/patients" component={DoctorPatients} />
               <Route path="/doctor/prescriptions/new" component={CreatePrescription} />
@@ -118,14 +154,16 @@ function AppRoutes() {
       </Route>
 
       {/* ── HOSPITAL ADMIN ────────────────────────── */}
-      <Route path="/hospital/:rest*">
+      <Route path="/hospital/*">
         <ProtectedRoute allowedRoles={['hospital_admin']}>
           <HospitalAdminLayout>
             <Switch>
               <Route path="/hospital/dashboard" component={HospitalDashboard} />
               <Route path="/hospital/wards" component={HospitalWards} />
               <Route path="/hospital/beds" component={HospitalBeds} />
+              <Route path="/hospital/admissions/:id/discharge" component={Discharge} />
               <Route path="/hospital/admissions" component={HospitalAdmissions} />
+              <Route path="/hospital/summary/:id" component={ClinicalSummary} />
               <Route path="/hospital/patients/:id" component={PatientEHR} />
               <Route path="/hospital/staff" component={HospitalStaff} />
               <Route><Redirect to="/hospital/dashboard" /></Route>
@@ -135,7 +173,7 @@ function AppRoutes() {
       </Route>
 
       {/* ── LAB ADMIN ─────────────────────────────── */}
-      <Route path="/lab/:rest*">
+      <Route path="/lab/*">
         <ProtectedRoute allowedRoles={['lab_admin']}>
           <LabAdminLayout>
             <Switch>
@@ -150,18 +188,19 @@ function AppRoutes() {
       </Route>
 
       {/* ── PLATFORM ADMIN ───────────────────────── */}
-      <Route path="/admin/:rest*">
+      <Route path="/admin/*">
         <ProtectedRoute allowedRoles={['platform_admin']}>
           <PlatformAdminLayout>
             <Switch>
               <Route path="/admin/dashboard" component={AdminDashboard} />
+              <Route path="/admin/summary/:id" component={ClinicalSummary} />
               <Route path="/admin/patients/:id" component={PatientEHR} />
-              <Route path="/admin/patients" component={AdminPatients} />
-              <Route path="/admin/doctors" component={AdminDoctors} />
-              <Route path="/admin/labs" component={AdminLabs} />
-              <Route path="/admin/hospitals" component={AdminHospitals} />
+              <Route path="/admin/patients">{() => <div className="legacy"><AdminPatients /></div>}</Route>
+              <Route path="/admin/doctors">{() => <div className="legacy"><AdminDoctors /></div>}</Route>
+              <Route path="/admin/labs">{() => <div className="legacy"><AdminLabs /></div>}</Route>
+              <Route path="/admin/hospitals">{() => <div className="legacy"><AdminHospitals /></div>}</Route>
               <Route path="/admin/verifications" component={AdminVerifications} />
-              <Route path="/admin/notifications" component={AdminNotifications} />
+              <Route path="/admin/notifications">{() => <div className="legacy"><AdminNotifications /></div>}</Route>
               <Route><Redirect to="/admin/dashboard" /></Route>
             </Switch>
           </PlatformAdminLayout>
@@ -180,7 +219,7 @@ function AppRoutes() {
 
       {/* 404 */}
       <Route>
-        <Redirect to="/" />
+        <Redirect to="/welcome" />
       </Route>
     </Switch>
   );
@@ -191,6 +230,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AppRoutes />
+        <Toaster position="top-right" richColors closeButton toastOptions={{ style: { fontFamily: 'Inter, sans-serif', borderRadius: 14 } }} />
       </AuthProvider>
     </QueryClientProvider>
   );
